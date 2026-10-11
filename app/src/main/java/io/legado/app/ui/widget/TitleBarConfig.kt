@@ -164,6 +164,17 @@ fun resolveTopBarContentColor(
     topBarTheme: Theme,
     contentBackground: Int?,
 ): Int {
+    // 墨水屏渲染下不使用页面里写死的菜单文字深浅（Theme.Dark / Theme.Light）：
+    // 顶栏底色是灰阶纯平面，固定浅色字压在纸白底、固定深色字压在墨黑底都会看不清
+    // （书籍详情页顶栏就是 themeMode="dark" 的透明顶栏）。一律按背景亮度取色，
+    // 判定不出亮度时按墨水屏色板（日间深色 / 夜间浅色）兜底。
+    if (AppConfig.isEInkMode) {
+        return if (contentBackground == null) {
+            context.primaryTextColor
+        } else {
+            context.getPrimaryTextColor(ColorUtils.calculateLuminance(contentBackground) > 0.5)
+        }
+    }
     if (topBarTheme != Theme.Auto) {
         return MenuExtensions.getMenuColor(context, topBarTheme)
     }
