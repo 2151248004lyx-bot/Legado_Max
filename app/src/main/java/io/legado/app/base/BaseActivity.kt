@@ -169,7 +169,9 @@ abstract class BaseActivity<VB : ViewBinding>(
         // 替换净化、字典规则、主题设置、其它设置等）在自定义顶栏背景色、深色壁纸、墨水屏纸白顶栏
         // 下会出现"标题深色、图标浅色"这类不一致
         val titleBar = findViewById<TitleBar>(R.id.title_bar)
-        if (titleBar == null) {
+        if (titleBar == null || titleBar.skipTopBarConfig) {
+            // 有意跳过统一顶栏的页面（skipTopBarConfig，如阅读页菜单）自己决定顶栏颜色，
+            // 这里不能替它按"顶栏实际底色"取色，否则会与页面自己给书名/图标上的色不一致
             menu.applyTint(this, toolBarTheme)
         } else {
             menu.applyTint(this, titleBar.topBarTheme, titleBar.topBarContentColor())

@@ -76,6 +76,10 @@ fun Menu.applyTint(
             impl.icon?.setTintMutate(
                 if (impl.requiresOverflow()) defaultTextColor else tint
             )
+            // actionView 形式的项（iconItemOnLongClick 把图标塞进 ImageButton）不吃 icon 上的 tint：
+            // setTintMutate 内部会 mutate 出新的 Drawable，而 ImageButton 还拿着旧实例，
+            // 于是这些图标会停在图标自带颜色上（深色图标压在深色顶栏上就是"看不清"）
+            impl.actionView?.findViewById<ImageButton>(R.id.item)?.setImageDrawable(impl.icon)
         }
     }
     return menu

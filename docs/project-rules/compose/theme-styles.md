@@ -176,6 +176,8 @@ TopAppBar(
 - 亮度采样统一走 `ThemeConfig.getImageLuminance(path)`（24×24 缩略图，失败也缓存，避免重组热路径反复解码）；半透明顶栏与壁纸合成时用"壁纸平均亮度对应的黑白代表色"参与混合，是刻意的近似。
 - **禁止**新增第二处取色：图标着色（`TitleBar.attachToActivity`）、标签栏/搜索框（`applyTopBarChildConfig`）、顶栏内的自定义子视图（如书架的分组名与箭头，见 `BookshelfFragment1.updateTitleColor`）都**必须**复用 `topBarContentColor()`，不得再出现 `getMenuColor(context, topBarTheme)` 或 `context.primaryTextColor` 直连。
 - **必须**：页面顶栏的菜单（含 `SearchView` 形式的 actionView）用 `Menu.applyTopBarTint(context)`（`utils/MenuExtensions.kt`）着色，**不要**用 `applyTint(context)`——后者按"主题主色 / 背景色"取色，与标题不同源。"我的"里的子界面正是这种"标题在 Activity 的 TitleBar 上、菜单在 Fragment 的 MenuProvider 里"的结构，`applyTint(context)` 还会在 Activity 之后执行并盖掉正确取色，表现为"标题深色、图标与搜索框浅色"；只有对话框这类没有页面顶栏的场景才继续用 `applyTint`。
+- **例外**：`skipTopBarConfig` 的页面（阅读页 / 漫画页菜单，见 §7.7.5）**不吃**这套统一取色。`BaseActivity.onCreateOptionsMenu` 遇到这类顶栏会回退到按主题取色，顶栏与菜单的前景色由页面自己负责（阅读页用 `ReadMenu.titleBarContentColor`，并在 `onPrepareOptionsMenu` 里给菜单图标上色）；这类页面的状态栏图标也要跟随**它们自己的顶栏底色**（阅读页：正文态按阅读背景明暗，菜单态按菜单顶栏底色），不能套用全局顶栏配置。
+- **注意**：actionView 形式的菜单项（`Menu.iconItemOnLongClick` 把图标塞进 `ImageButton`）不吃 `item.icon` 上的 tint——`setTintMutate` 会 mutate 出新 Drawable 而 ImageButton 还拿着旧实例，所以 `applyTint` 会给其中的 ImageButton 重设一次 Drawable。
 - 顶栏背景被调用方另行改掉的页面（书籍详情页/音频播放页把顶栏改透明露出封面），改完背景**必须**调 `TitleBar.refreshTopBarContentColor()` 重算前景色，否则标题会停在"不透明底"时的旧配色上、与随后重算的图标不同色。
 - 主界面与"我的"子界面的顶栏常压在**主界面壁纸**上（顶栏透明 + 页面背景色透明），只看 `context.backgroundColor` 会在"浅色背景色 + 深色壁纸"（或反之）时取反，这是顶栏撞色的主要来源。
 

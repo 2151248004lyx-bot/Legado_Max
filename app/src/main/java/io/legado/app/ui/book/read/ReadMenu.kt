@@ -101,6 +101,16 @@ class ReadMenu @JvmOverloads constructor(
         context.getPrimaryTextColor(ColorUtils.isColorLight(bgColor))
     }
 
+    /**
+     * 顶栏（书名、返回/更多按钮、菜单项图标）的实际前景色。
+     *
+     * 与 [initView] 给顶栏上色时用的是同一个值：沉浸式（跟随阅读背景）用阅读文字色，
+     * 否则按主题主色取深浅。阅读页顶栏是 `skipTopBarConfig` 的有意例外，
+     * 菜单图标必须跟它同色，不能吃"顶栏统一取色"那一套。
+     */
+    val titleBarContentColor: Int
+        get() = if (immersiveMenu) textColor else context.primaryTextColor
+
     private var bottomBackgroundList: ColorStateList = Selector.colorBuild()
         .setDefaultColor(bgColor)
         .setPressedColor(ColorUtils.darkenColor(bgColor))
@@ -252,9 +262,20 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     fun refreshMenuColorFilter() {
-        if (immersiveMenu) {
-            binding.titleBar.setColorFilter(textColor)
-        }
+        upTitleBarColorFilter()
+    }
+
+    /**
+     * 重新给顶栏（书名、返回、更多）上色。
+     *
+     * [initView] 里那次着色不够：`TitleBar.attachToActivity` 会走
+     * `setSupportActionBar` + `setDisplayHomeAsUpEnabled`，ActionBar 之后才把返回箭头塞进
+     * `toolbar.navigationIcon`，那次着色就落不到它身上，返回箭头会停在主题默认的灰色上。
+     * 所以每次显示菜单、以及外部（ReadBookActivity）刷新菜单时都要重设一次。
+     */
+    private fun upTitleBarColorFilter() {
+        binding.titleBar.setTextColor(titleBarContentColor)
+        binding.titleBar.setColorFilter(titleBarContentColor)
     }
 
     private fun upColorConfig() {
@@ -375,6 +396,7 @@ class ReadMenu @JvmOverloads constructor(
         this.visible()
         binding.titleBar.visible()
         binding.bottomMenu.visible()
+        upTitleBarColorFilter()
         if (anim) {
             binding.titleBar.startAnimation(menuTopIn)
             binding.bottomMenu.startAnimation(menuBottomIn)

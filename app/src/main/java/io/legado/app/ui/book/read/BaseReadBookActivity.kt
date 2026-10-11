@@ -30,6 +30,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.bottomBackground
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.CacheBook
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.config.BgTextConfigDialog
@@ -183,18 +184,31 @@ abstract class BaseReadBookActivity :
         }
         upSystemUiVisibilityO(isInMultiWindow, toolBarHide)
         if (toolBarHide) {
-            setLightStatusBar(ReadBookConfig.durConfig.curStatusIconDark())
-        } else {
-            val statusBarColor =
-                if (AppConfig.readBarStyleFollowPage
-                    && ReadBookConfig.durConfig.curBgType() == 0
-                    || useBgMeanColor
-                ) {
-                    ReadBookConfig.bgMeanColor
+            // 正文模式：状态栏浮在阅读背景上，图标深浅按阅读背景的实际平均亮度判定，
+            // 而不是只认阅读主题里那个手动开关——"浅色背景图 + 未勾选深色状态栏图标"这种组合
+            // 会让时间与电量在浅色背景上看不见。均色算不出来（bgMeanColor == 0，见
+            // ReadBookConfig.upBg）时再回退开关
+            val bgMeanColor = ReadBookConfig.bgMeanColor
+            setLightStatusBar(
+                if (bgMeanColor == 0) {
+                    ReadBookConfig.durConfig.curStatusIconDark()
                 } else {
-                    ThemeStore.statusBarColor(this, AppConfig.isTransparentStatusBar)
-                }
-            setLightStatusBar(ColorUtils.isColorLight(statusBarColor))
+                    ColorUtils.isColorLight(bgMeanColor)
+                },
+            )
+        } else {
+            // 菜单显示时状态栏区域被阅读菜单顶栏的底色覆盖，按它判定图标深浅。规则与
+            // ReadMenu.initView 给顶栏设背景时一致：沉浸式（跟随阅读背景）用阅读背景色，
+            // 否则用主题主色。原来按"主题状态栏色"判定，那个色与菜单顶栏无关，
+            // 于是黑菜单会被配上深色图标
+            val menuTitleBgColor = if (useBgMeanColor
+                || (AppConfig.readBarStyleFollowPage && ReadBookConfig.durConfig.curBgType() == 0)
+            ) {
+                ReadBookConfig.bgMeanColor
+            } else {
+                primaryColor
+            }
+            setLightStatusBar(ColorUtils.isColorLight(menuTitleBgColor))
         }
     }
 

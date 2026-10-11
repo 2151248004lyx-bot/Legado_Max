@@ -112,6 +112,14 @@ class MangaMenu @JvmOverloads constructor(
         bindEvent()
     }
 
+    /**
+     * 顶栏（书名、返回/更多按钮、菜单项图标）的实际前景色。
+     * 与 [initView] 给顶栏上色时是同一个值（非墨水屏按主题主色取深浅）。
+     * 漫画页顶栏是 `skipTopBarConfig` 的有意例外，菜单图标要跟它同色，不能吃"顶栏统一取色"。
+     */
+    val titleBarContentColor: Int
+        get() = context.primaryTextColor
+
     private fun initView() = binding.run {
         initAnimation()
         val brightnessBackground = GradientDrawable()

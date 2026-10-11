@@ -66,6 +66,7 @@ import io.legado.app.ui.widget.recycler.LoadMoreView
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.StartActivityContract
+import io.legado.app.utils.applyTint
 import io.legado.app.utils.canScroll
 import io.legado.app.utils.fastBinarySearch
 import io.legado.app.utils.findCenterViewPosition
@@ -486,6 +487,13 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
         menuInflater.inflate(R.menu.book_manga, menu)
         upMenu(menu)
         return super.onCompatCreateOptionsMenu(menu)
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        // 漫画页顶栏同样是 skipTopBarConfig 的有意例外（书名/返回/更多由 MangaMenu 上色），
+        // 菜单项图标必须跟它同色，不能吃 BaseActivity 的顶栏统一取色
+        menu.applyTint(this, tintColor = binding.mangaMenu.titleBarContentColor)
+        return super.onPrepareOptionsMenu(menu)
     }
 
     /**

@@ -116,6 +116,7 @@ import io.legado.app.utils.LogUtils
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyOpenTint
+import io.legado.app.utils.applyTint
 import io.legado.app.utils.argbHexString
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.dismissDialogFragment
@@ -514,6 +515,9 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         this.menu = menu
         upMenu()
+        // 阅读页顶栏是 skipTopBarConfig 的有意例外（书名/返回/更多由 ReadMenu 按主题主色上色），
+        // 菜单项图标（换源、刷新、缓存、更多等）必须跟它同色，不能吃 BaseActivity 的顶栏统一取色
+        menu.applyTint(this, tintColor = binding.readMenu.titleBarContentColor)
         return super.onPrepareOptionsMenu(menu)
     }
 
