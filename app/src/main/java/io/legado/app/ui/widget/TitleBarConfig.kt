@@ -51,9 +51,7 @@ import java.io.File
 fun TitleBar.applyTopBarConfig() {
     if (skipTopBarConfig) return
     if (AppConfig.isEInkMode) {
-        setBackgroundResource(R.drawable.bg_eink_border_bottom)
-        applyTopBarContentColor()
-        applyTopBarChildConfig()
+        applyEInkTopBarConfig()
         return
     }
     if (!opaque && context.transparentNavBar) {
@@ -71,6 +69,33 @@ fun TitleBar.applyTopBarConfig() {
     }
     val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
     applyTopBarConfig(config)
+}
+
+/**
+ * 墨水屏渲染下的顶栏落地。
+ *
+ * 墨水屏只该把彩色换成灰阶，不该改写用户配好的顶栏外观——用户设了「顶栏颜色透明」
+ * 或顶栏壁纸时照旧生效（此前一律换成不透明色带，表现为"顶栏透明没起作用"）；
+ * 只有配置本身就是不透明纯色时，才换成墨水屏描边变体（纸白/墨黑平面 + 1dp 分隔线）。
+ */
+private fun TitleBar.applyEInkTopBarConfig() {
+    val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
+    val backgroundAlpha = if (config.style == TopBarConfig.STYLE_REGULAR) {
+        config.wallpaperAlpha
+    } else {
+        config.tagBarAlpha
+    }
+    val hasWallpaper = config.style == TopBarConfig.STYLE_REGULAR &&
+        TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme) != null
+    if (hasWallpaper || (!opaque && !ignoreTopBarOpacity && backgroundAlpha < 100)) {
+        // 透明/半透明或带壁纸：交给通用落地，保留用户配置（其中的阴影已按墨水屏去掉）
+        applyTopBarConfig(config)
+        return
+    }
+    setBackgroundResource(R.drawable.bg_eink_border_bottom)
+    elevation = 0f
+    applyTopBarContentColor()
+    applyTopBarChildConfig()
 }
 
 private fun TitleBar.applyTopBarConfig(config: TopBarConfig.Config) {
@@ -103,9 +128,14 @@ private fun TitleBar.applyTopBarConfig(config: TopBarConfig.Config) {
     } else {
         LayerDrawable(arrayOf(shape, wallpaper))
     }
-    elevation = when {
-        backgroundAlpha < 100 -> 0.1f
-        else -> context.elevation
+    // 墨水屏渲染去掉阴影：半透明顶栏原本靠 0.1dp 阴影勾边，墨水屏不需要这层
+    elevation = if (AppConfig.isEInkMode) {
+        0f
+    } else {
+        when {
+            backgroundAlpha < 100 -> 0.1f
+            else -> context.elevation
+        }
     }
     val contentColor = topBarContentColor()
     applyTopBarContentColor(contentColor)
