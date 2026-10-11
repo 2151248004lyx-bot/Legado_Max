@@ -271,7 +271,6 @@ private fun BlockRuleConfigContent(
     }
 
     ModalBottomSheet(
-        modifier = Modifier.eInkGrayscale(),
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = pageCardContainerColor(),
@@ -285,9 +284,11 @@ private fun BlockRuleConfigContent(
         // 顶部用不受消耗链影响的静态状态栏高度补偿（asPaddingValues 不扣除
         // consumeWindowInsets 传入的 offset），满屏时标题不会顶到状态栏下
         val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        // 灰阶贴在内容根：sheet 宿主带 offset 平移，贴在 ModalBottomSheet 的 modifier 上会被图层边界裁掉下半截
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .eInkGrayscale()
                 .padding(top = statusBarTop)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),

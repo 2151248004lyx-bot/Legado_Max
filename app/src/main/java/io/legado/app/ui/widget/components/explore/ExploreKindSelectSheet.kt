@@ -137,8 +137,6 @@ fun ExploreKindSelectSheet(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
-        // 弹层是独立窗口，页面那层灰阶罩不到，这里再贴一次
-        modifier = Modifier.eInkGrayscale(),
         // 只保留 Bottom 侧 insets：M3 默认的 safeDrawing(Top+Bottom) 中 Top 部分会因
         // ModalBottomSheet 内部 consumeWindowInsets(top = sheetState.offset) 随 offset 变化，
         // 导致内容顶 padding → sheet 高度 → Expanded 锚点(fullHeight-sheetHeight) 联动。
@@ -149,9 +147,11 @@ fun ExploreKindSelectSheet(
         // 顶部用不受消耗链影响的静态状态栏高度补偿（asPaddingValues 不扣除
         // consumeWindowInsets 传入的 offset），满屏时标题不会顶到状态栏下
         val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        // 灰阶贴在内容根：sheet 宿主带 offset 平移，贴在 ModalBottomSheet 的 modifier 上会被图层边界裁掉下半截
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .eInkGrayscale()
                 .padding(top = statusBarTop)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp)

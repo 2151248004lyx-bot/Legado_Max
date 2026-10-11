@@ -98,8 +98,7 @@ fun BookBottomSheet(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            // 弹层是独立窗口，页面那层灰阶罩不到，这里再贴一次
-            modifier = Modifier.fillMaxWidth().eInkGrayscale(),
+            modifier = Modifier.fillMaxWidth(),
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             // 只保留 Bottom 侧 insets：M3 默认的 safeDrawing(Top+Bottom) 中 Top 部分会因
@@ -112,10 +111,13 @@ fun BookBottomSheet(
             // 顶部用不受消耗链影响的静态状态栏高度补偿（asPaddingValues 不扣除
             // consumeWindowInsets 传入的 offset），满屏时标题不会顶到状态栏下
             val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            // 整个内容区域可滚动，按钮在滚动内容内部
+            // 整个内容区域可滚动，按钮在滚动内容内部。
+            // 灰阶贴在内容根而不是 ModalBottomSheet 的 modifier 上：sheet 的宿主带 offset 平移，
+            // 而 saveLayer 的图层按节点尺寸从原点截取，贴在 modifier 上会让平移后的内容只剩下半截。
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .eInkGrayscale()
                     .padding(top = statusBarTop)
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
