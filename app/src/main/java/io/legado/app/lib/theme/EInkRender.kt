@@ -111,6 +111,13 @@ object EInkRender {
  * 图层面积等于修饰符作用到的区域，所以要贴在**具体的名称文本**上，
  * 不要贴在整页 / 整个列表项上（整页离屏合成会带来 10MB 级的额外缓冲与填充开销）。
  * 关闭墨水屏渲染时直接返回原修饰符，零开销。
+ *
+ * 两类例外（细则见 `docs/project-rules/compose/theme-styles.md` §7.10）：
+ * - **另开窗口的 Compose 弹层**（`AlertDialog` / `DropdownMenu` / `ModalBottomSheet`）不继承根层，
+ *   要在弹层内容上再罩一层；
+ * - 其中 `ModalBottomSheet` **必须贴在内容根**（`content` 里最外层容器的 modifier），
+ *   **不能**贴在 `ModalBottomSheet(modifier = ...)`：sheet 宿主自带 `offset` 平移，图层按节点尺寸
+ *   从原点截取，会把平移后的内容裁掉下半截。
  */
 fun Modifier.eInkGrayscale(): Modifier {
     val filter = EInkRender.composeFilterOrNull() ?: return this
