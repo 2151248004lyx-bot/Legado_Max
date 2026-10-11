@@ -22,6 +22,7 @@ import android.graphics.drawable.LayerDrawable
 import android.widget.FrameLayout
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import androidx.core.view.get
 import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
@@ -509,9 +510,6 @@ class MainActivity :
         bottomNavigationView.setOnNavigationItemSelectedListener(this@MainActivity)
         bottomNavigationView.setOnNavigationItemReselectedListener(this@MainActivity)
         refreshBottomNavigationConfig(force = true)
-        if (AppConfig.isEInkMode) {
-            bottomNavigationView.setBackgroundResource(R.drawable.bg_eink_border_top)
-        }
         bottomNavigationGlass.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
             // 只有导航栏高度真的变了才重新应用底栏：insets 在启动期会派发多次
             // （状态栏/导航栏/IME 各来一次），每次都 force 重建会让底栏图标与布局整包重做，
@@ -1211,8 +1209,14 @@ class MainActivity :
             }
             bottomNavigationGlassView.invisible()
             // 不透明度为 0 时无静态背景，确保完全透明；
-            // 否则用静态玻璃材质 Drawable 替代实时模糊（低性能设备降级）
-            bottomNavigationShellOverlay.background = themeBottomBarBackground(config, floating, bgColor)
+            // 否则用静态玻璃材质 Drawable 替代实时模糊（低性能设备降级）。
+            // 墨水屏渲染下换成灰阶纯平面 + 顶部 1px 分隔线：只有落在 shell overlay 上才与
+            // 玻璃共用同一个容器——直接铺到底栏本身会把玻璃/磨砂层整个盖住（表现为玻璃不显示）。
+            bottomNavigationShellOverlay.background = if (AppConfig.isEInkMode) {
+                ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_eink_border_top)
+            } else {
+                themeBottomBarBackground(config, floating, bgColor)
+            }
         }
     }
 
