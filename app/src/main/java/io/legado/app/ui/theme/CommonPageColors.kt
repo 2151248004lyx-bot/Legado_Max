@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.ColorUtils as AndroidXColorUtils
 import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.legado.app.R
@@ -88,15 +87,15 @@ fun pageTopBarColors(): PageTopBarColors {
     val containerColor = TopBarConfig.withOpacity(backgroundColor, alphaPercent)
     val wallpaperFile = TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme)
         ?.takeIf { !transparentNavBar && config.style == TopBarConfig.STYLE_REGULAR }
-    // 内容色与 View 侧 TitleBar 走同一个入口（见 resolveTopBarContentColor）：
-    // 叠了壁纸时无法判定亮度，传 null 回退默认取色；否则按与页面背景合成后的亮度取深浅
-    val backgroundSolid = if (wallpaperFile != null) {
-        null
-    } else {
-        AndroidXColorUtils.compositeColors(containerColor, context.backgroundColor)
-    }
+    // 内容色与 View 侧 TitleBar 走同一个入口（见 resolveTopBarContentColor）：传入顶栏自身底色，
+    // 由它决定"按底色取"还是"回退到页面声明 / 窗口背景（壁纸）"。
+    // 顶栏自带壁纸时底色无从判定，传 null；顶栏透明时同样传 null 的等价路径（alpha 为 0）
     val contentColor = Color(
-        resolveTopBarContentColor(context, Theme.Auto, backgroundSolid)
+        resolveTopBarContentColor(
+            context = context,
+            topBarTheme = Theme.Auto,
+            topBarBackground = containerColor.takeIf { wallpaperFile == null },
+        )
     )
     return PageTopBarColors(
         containerColor = Color(containerColor),

@@ -10,6 +10,7 @@ import android.util.DisplayMetrics
 import android.util.LruCache
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.graphics.ColorUtils as AndroidXColorUtils
 import androidx.core.graphics.toColorInt
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -281,26 +282,68 @@ object ThemeConfig {
     fun getBackgroundSignature(context: Context): String? {
         val night = AppConfig.isNightTheme
         val prefKey = if (night) PreferKey.bgImageN else PreferKey.bgImage
-        val rawPath = context.getPrefString(prefKey).orEmpty()
-        if (rawPath.isBlank()) return null
-        // 与 getBgImage 相同：在线背景需先落到缓存文件，仅文件名的需拼接完整路径，
-        // 绝对路径须为真实存在的文件，否则视为无背景图
-        val path = if (rawPath.startsWith("http")) {
-            val filePath = FileUtils.getPath(context.externalFiles, prefKey, getUrlToFile(rawPath))
-            filePath.takeIf { FileUtils.exist(it) }
-        } else if (!rawPath.contains(File.separator)) {
-            val filePath = FileUtils.getPath(context.externalFiles, prefKey, rawPath)
-            filePath.takeIf { FileUtils.exist(it) }
-        } else {
-            rawPath.takeIf { File(it).isFile }
-        }
-        if (path == null) return null
+        val path = resolveBgImagePath(context) ?: return null
         val blurring = context.getPrefInt(
             if (night) PreferKey.bgImageNBlurring else PreferKey.bgImageBlurring,
             0,
         )
         val file = File(path)
         return "bg:$prefKey:${file.absolutePath}:${file.lastModified()}:${file.length()}:$blurring:${AppConfig.isEInkMode}"
+    }
+
+    /**
+     * 解析当前日/夜主题下窗口背景图（主界面壁纸）的真实文件路径。
+     * 与 [getBgImage] 同一套规则：在线背景需先落到缓存文件，仅文件名的需拼接完整路径，
+     * 绝对路径须为真实存在的文件，否则视为无背景图。
+     */
+    fun resolveBgImagePath(context: Context): String? {
+        val prefKey = if (AppConfig.isNightTheme) PreferKey.bgImageN else PreferKey.bgImage
+        val rawPath = context.getPrefString(prefKey).orEmpty()
+        if (rawPath.isBlank()) return null
+        return when {
+            rawPath.startsWith("http") -> FileUtils
+                .getPath(context.externalFiles, prefKey, getUrlToFile(rawPath))
+                .takeIf { FileUtils.exist(it) }
+            !rawPath.contains(File.separator) -> FileUtils
+                .getPath(context.externalFiles, prefKey, rawPath)
+                .takeIf { FileUtils.exist(it) }
+            else -> rawPath.takeIf { File(it).isFile }
+        }
+    }
+
+    /** 背景图亮度采样尺寸：只需判断整体偏亮还是偏暗，24x24 足够而解码开销可忽略 */
+    private const val bgLuminanceSampleSize = 24
+
+    /** 背景图签名 → 平均亮度。容量按日/夜与前后两张图留余量 */
+    private val bgLuminanceCache = object : LruCache<String, Float>(4) {}
+
+    /**
+     * 窗口背景图（主界面壁纸）的平均亮度（0..1）；未配置背景图或解不出来时返回 null。
+     *
+     * 顶栏透明时文字与图标实际压在壁纸上，只按主题背景色判断深浅会在"浅色底 + 深色壁纸"
+     * 这类组合里取反（深色文字压深色壁纸），表现为顶栏文字/图标与底色撞色。这里按
+     * 路径 + 修改时间 + 大小缓存结果，顶栏在每个页面初始化时都会问一次，缓存后是 O(1)。
+     */
+    fun getBgImageLuminance(context: Context): Float? {
+        val path = resolveBgImagePath(context) ?: return null
+        val file = File(path)
+        val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}"
+        bgLuminanceCache.get(key)?.let { return it }
+        val luminance = kotlin.runCatching {
+            val sample = BitmapUtils
+                .decodeBitmap(path, bgLuminanceSampleSize, bgLuminanceSampleSize)
+                ?: return null
+            val pixels = IntArray(sample.width * sample.height)
+            sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
+            sample.recycle()
+            var sum = 0.0
+            for (pixel in pixels) {
+                sum += AndroidXColorUtils.calculateLuminance(pixel)
+            }
+            (sum / pixels.size).toFloat()
+        }.getOrNull() ?: return null
+        bgLuminanceCache.put(key, luminance)
+        return luminance
     }
 
     /** 命中缓存返回独立副本（mutate），避免多窗口共享同一 Drawable 实例导致状态冲突 */

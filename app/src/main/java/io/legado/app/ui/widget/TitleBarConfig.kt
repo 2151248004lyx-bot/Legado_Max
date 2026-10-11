@@ -27,13 +27,13 @@ import com.google.android.material.tabs.TabLayout
 import io.legado.app.R
 import io.legado.app.constant.Theme
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.transparentNavBar
 import io.legado.app.utils.BitmapUtils
 import io.legado.app.utils.MenuExtensions
@@ -150,44 +150,74 @@ private fun TitleBar.applyTopBarContentColor(contentColor: Int = topBarContentCo
 }
 
 /**
- * 顶栏内容色（文字/图标）的统一取色入口。
+ * 顶栏内容色（标题、标签栏、搜索框、返回与菜单图标）的统一取色入口。
  *
- * View 侧 [TitleBar] 与 Compose 侧顶栏（[io.legado.app.ui.theme.pageTopBarColors]）必须走同一套规则：
- * 历史实现里 Compose 侧按「主色明度」取色、View 侧按「顶栏实际背景亮度」取色，
- * 一旦顶栏背景色不是主题主色（自定义顶栏配置），两套实现会给出深浅相反的文字色。
+ * View 侧 [TitleBar] 与 Compose 侧顶栏（[io.legado.app.ui.theme.pageTopBarColors]）都走这里：
+ * 同一根顶栏的前景必须同色，否则会出现"标题深色、图标浅色"这类不一致；取色依据又必须落在
+ * 顶栏实际压着的底色上，否则会与底色撞色（历史实现里图标按"主题主色"取、文字按"顶栏背景"取，
+ * 于是自定义顶栏背景色与"透明顶栏压壁纸"这两种场景都会翻车）。
  *
- * @param contentBackground 顶栏实际显示背景的纯色（半透明时需先与页面背景合成）；
- *   含壁纸等无法判定亮度的图层时传 null，回退到 [MenuExtensions.getMenuColor] 的默认取色
+ * 规则（按可靠性排序）：
+ * 1. 顶栏有自己的底色（不透明或半透明）→ 与窗口背景合成后按亮度取深浅。这条**优先于**页面
+ *    写死的 [topBarTheme]：顶栏底色是主题/用户配出来的，写死深浅会配出"纸白顶栏压白图标"。
+ * 2. 顶栏完全没有底色（"顶栏颜色透明" / 未配顶栏背景）→ 页面显式声明的 [topBarTheme] 说了算
+ *    （书籍详情页这类透明顶栏底下是封面图，亮度无从判定）。
+ * 3. 顶栏没底色、页面也没声明 → 按顶栏背后实际显示的窗口背景取色：有主界面壁纸时用壁纸的
+ *    平均亮度，没有壁纸时用主题背景色。
+ *
+ * @param topBarBackground 顶栏自身底色（含 alpha）；顶栏完全透明或底色解析不出来时传 null
  */
 fun resolveTopBarContentColor(
     context: Context,
     topBarTheme: Theme,
-    contentBackground: Int?,
+    topBarBackground: Int?,
 ): Int {
+    if (topBarBackground != null && Color.alpha(topBarBackground) > 0) {
+        val solid = if (Color.alpha(topBarBackground) == 255) {
+            topBarBackground
+        } else {
+            ColorUtils.compositeColors(topBarBackground, windowBackgroundColor(context))
+        }
+        // 背景越亮文字越深：亮背景(>0.5)用深色文字，暗背景用浅色文字。
+        // 与 MenuExtensions.getMenuColor 透明导航栏分支的取色约定保持一致。
+        return context.getPrimaryTextColor(ColorUtils.calculateLuminance(solid) > 0.5)
+    }
     if (topBarTheme != Theme.Auto) {
         return MenuExtensions.getMenuColor(context, topBarTheme)
     }
-    if (contentBackground == null) {
-        return MenuExtensions.getMenuColor(context, topBarTheme)
-    }
-    // 背景越亮文字越深：亮背景(>0.5)用深色文字，暗背景用浅色文字。
-    // 与 MenuExtensions.getMenuColor 透明导航栏分支的取色约定保持一致。
-    return context.getPrimaryTextColor(
-        ColorUtils.calculateLuminance(contentBackground) > 0.5,
-    )
+    return context.getPrimaryTextColor(windowBackgroundLuminance(context) > 0.5f)
+}
+
+/** 顶栏背后窗口背景的代表色：有主界面壁纸时按壁纸平均亮度取黑白，否则用主题背景色 */
+private fun windowBackgroundColor(context: Context): Int {
+    val luminance = ThemeConfig.getBgImageLuminance(context)
+        ?: return context.backgroundColor
+    return if (luminance > 0.5f) Color.WHITE else Color.BLACK
 }
 
 /**
- * 顶栏内容颜色。
- * Auto 模式下按顶栏实际背景（TopBarConfig 纯色/半透明背景与页面背景合成）的亮度决定深浅，
- * 避免主题主色与顶栏背景色调不一致时文字看不清（与二级标签栏的取色思路一致）；
- * 背景含壁纸等无法判定亮度的图层时回退到 getMenuColor 的默认逻辑。
+ * 顶栏背后窗口背景的亮度：有主界面壁纸时按壁纸平均亮度，否则按主题背景色。
+ *
+ * 只按主题背景色判断深浅，会在"浅色背景色 + 深色壁纸"（或反之）这类组合里取反——
+ * 主界面与"我的"子界面的顶栏都压在壁纸上，这正是顶栏文字/图标撞色的主要来源。
  */
-private fun TitleBar.topBarContentColor(): Int {
+private fun windowBackgroundLuminance(context: Context): Float {
+    return ThemeConfig.getBgImageLuminance(context)
+        ?: ColorUtils.calculateLuminance(context.backgroundColor).toFloat()
+}
+
+/**
+ * 顶栏内容颜色：按顶栏自身底色取色（见 [resolveTopBarContentColor]），
+ * 顶栏透明时回落到窗口背景（壁纸）亮度。
+ *
+ * internal 而非 private：`TitleBar.attachToActivity` 在窗口附加后还要给返回/菜单图标上色，
+ * 那里必须复用同一个函数，否则图标会与标题各按一套规则取色。
+ */
+internal fun TitleBar.topBarContentColor(): Int {
     return resolveTopBarContentColor(
         context = context,
         topBarTheme = topBarTheme,
-        contentBackground = background.resolveSolidColor()?.compositeOverPageBackground(context),
+        topBarBackground = background.resolveSolidColor(),
     )
 }
 
@@ -210,29 +240,24 @@ private fun Drawable?.resolveSolidColor(): Int? {
 
 /**
  * GradientDrawable.getColor() 为 API 24 新增，函数级守卫满足 lint NewApi 检查；
- * 低版本无法读取纯色，回退 null 让 topBarContentColor 走 getMenuColor 的默认取色
+ * 低版本读不出纯色，回退 null 交给 [resolveTopBarContentColor] 按页面声明 / 窗口背景取色
  */
 private fun GradientDrawable.resolveGradientSolidColor(): Int? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
     return color?.defaultColor?.takeIf { it != Color.TRANSPARENT }
 }
 
-/** 半透明背景色与页面背景合成，得到实际显示的底色 */
-private fun Int.compositeOverPageBackground(context: Context): Int = if (Color.alpha(this) == 255) {
-    this
-} else {
-    ColorUtils.compositeColors(this, context.backgroundColor)
-}
-
-/** 应用顶栏子 View 配置（TabLayout、SearchView），使用当前 TopBarConfig */
-fun View.applyTopBarChildConfig() {
-    val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
-    val contentColor = if (context.transparentNavBar) {
-        MenuExtensions.getMenuColor(context)
-    } else {
-        context.primaryTextColor
-    }
-    applyTopBarChildConfig(config, contentColor)
+/**
+ * 应用顶栏子 View 配置（TabLayout、SearchView），使用当前 TopBarConfig。
+ *
+ * 取色与标题、图标同源（[TitleBar.topBarContentColor]）：此前这里按"透明底栏 / 主题主色"
+ * 单独取色，于是标签栏文字与标题会不一致，顶栏背景不是主题主色时还会与底色撞色。
+ */
+private fun TitleBar.applyTopBarChildConfig() {
+    applyTopBarChildConfig(
+        TopBarConfig.currentConfig(context, AppConfig.isNightTheme),
+        topBarContentColor(),
+    )
 }
 
 /** 生成常规样式的圆角背景 Drawable */

@@ -1,7 +1,7 @@
 # Compose UI 规范 — 主题与样式
 
 > 原 `UI-ARCHITECTURE.md`（2026-08-19）拆分产物：§7，章节编号沿用原编号，跨文件引用按「文件名 §编号」格式书写。生效范围、执行方式、老代码策略等通用约定见 [README.md](./README.md)。
-> **最后更新**：2026-10-06
+> **最后更新**：2026-10-11
 
 ---
 
@@ -165,9 +165,18 @@ TopAppBar(
 
 - View 体系页面/弹窗顶栏 **必须**统一走 `TitleBar`（`ui/widget/TitleBar.kt`）`applyTopBarConfig()`，由 `TopBarConfig` 计算背景/圆角/壁纸/文字色。
 - 裸 `androidx.appcompat.widget.Toolbar` 如需接入统一色，**必须**通过 `TopBarConfig` 计算容器色（`withOpacity(backgroundColor, alphaPercent)`，`STYLE_REGULAR` 用 `resolveBackgroundColor` / `wallpaperAlpha`，否则 `tagBarColor ?: primaryColor` / `tagBarAlpha`），**禁止**直接 `setBackgroundColor(primaryColor)` 写死。
-- `TitleBar` 上的 `skipTopBarConfig="true"` 是「有意跳过统一主题」的显式声明，使用前必须确认意图（见 §7.7.4）。
+- `TitleBar` 上的 `skipTopBarConfig="true"` 是「有意跳过统一主题」的显式声明，使用前必须确认意图（见 §7.7.5）。
 
-#### 7.7.4 有意例外（改前必读，禁止"修掉"）
+#### 7.7.4 顶栏前景取色（强制）
+
+> 顶栏里的标题、副标题、二级标签栏、搜索框、返回图标、菜单/overflow 图标**必须同色**，且颜色要跟着**顶栏实际压着的底色**走——两套取色路径（图标按主题主色、文字按顶栏背景）会直接表现为"文字与图标不同色"和"图标与底色撞色"。
+
+- **必须**走唯一入口 `resolveTopBarContentColor(context, topBarTheme, topBarBackground)`（`ui/widget/TitleBarConfig.kt`）：View 侧由 `TitleBar.topBarContentColor()` 调用，Compose 侧由 `pageTopBarColors()` 调用；`topBarBackground` 传**顶栏自身底色（含 alpha）**，顶栏完全透明、自带壁纸或底色解析不出来时传 `null`。
+- 取色规则（按可靠性排序，实现在 `resolveTopBarContentColor` 内）：① 顶栏有自己的底色 → 与窗口背景合成后按亮度取深浅，**优先于**页面写死的 `themeMode`；② 顶栏没有底色 → 页面显式声明的 `themeMode="dark/light"` 说了算；③ 都没有 → 按**顶栏背后实际显示的窗口背景**取色：有主界面壁纸时用壁纸平均亮度（`ThemeConfig.getBgImageLuminance`，按路径+修改时间缓存），没有壁纸时用主题背景色。
+- **禁止**新增第二处取色：图标着色（`TitleBar.attachToActivity`）、标签栏/搜索框（`applyTopBarChildConfig`）都**必须**复用 `topBarContentColor()`，不得再出现 `getMenuColor(context, topBarTheme)` 或 `context.primaryTextColor` 直连。
+- 主界面与"我的"子界面的顶栏常压在**主界面壁纸**上（顶栏透明 + 页面背景色透明），只看 `context.backgroundColor` 会在"浅色背景色 + 深色壁纸"（或反之）时取反，这是顶栏撞色的主要来源。
+
+#### 7.7.5 有意例外（改前必读，禁止"修掉"）
 
 以下两处顶栏**有意**不走统一主题，属于设计决策而非 bug，**禁止**在无需求变更时把它们"接入"统一色：
 

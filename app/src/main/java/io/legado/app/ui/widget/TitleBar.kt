@@ -18,7 +18,6 @@ import androidx.core.view.children
 import com.google.android.material.appbar.AppBarLayout
 import io.legado.app.R
 import io.legado.app.constant.Theme
-import io.legado.app.utils.MenuExtensions
 import io.legado.app.utils.activity
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import splitties.views.bottomPadding
@@ -281,7 +280,9 @@ class TitleBar @JvmOverloads constructor(
             activity?.let {
                 it.setSupportActionBar(toolbar)
                 it.supportActionBar?.setDisplayHomeAsUpEnabled(displayHomeAsUp)
-                setColorFilter(MenuExtensions.getMenuColor(context, topBarTheme))
+                // 图标与标题复用同一个取色入口：此前这里按"主题主色 / 页面写死的 themeMode"取，
+                // 与标题"按顶栏底色取"是两套规则，于是图标会与标题不同色、也会与顶栏底色撞色
+                setColorFilter(topBarContentColor())
             }
         }
     }
