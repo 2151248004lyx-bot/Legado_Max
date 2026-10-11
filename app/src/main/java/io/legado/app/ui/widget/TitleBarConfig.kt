@@ -166,12 +166,18 @@ private fun TitleBar.applyTopBarContentColor(contentColor: Int = topBarContentCo
  *    平均亮度，没有壁纸时用主题背景色。
  *
  * @param topBarBackground 顶栏自身底色（含 alpha）；顶栏完全透明或底色解析不出来时传 null
+ * @param topBarWallpaperLuminance 顶栏自带壁纸的平均亮度；没叠壁纸时传 null。
+ *   壁纸压在底色之上，此时按壁纸亮度取色最准（否则会退到"页面声明 / 窗口背景"而取错）
  */
 fun resolveTopBarContentColor(
     context: Context,
     topBarTheme: Theme,
     topBarBackground: Int?,
+    topBarWallpaperLuminance: Float? = null,
 ): Int {
+    if (topBarWallpaperLuminance != null) {
+        return context.getPrimaryTextColor(topBarWallpaperLuminance > 0.5f)
+    }
     if (topBarBackground != null && Color.alpha(topBarBackground) > 0) {
         val solid = if (Color.alpha(topBarBackground) == 255) {
             topBarBackground
@@ -211,14 +217,32 @@ private fun windowBackgroundLuminance(context: Context): Float {
  * 顶栏透明时回落到窗口背景（壁纸）亮度。
  *
  * internal 而非 private：`TitleBar.attachToActivity` 在窗口附加后还要给返回/菜单图标上色，
- * 那里必须复用同一个函数，否则图标会与标题各按一套规则取色。
+ * 书架的顶栏分组选择器等自定义子视图也要按同一规则取色，它们都必须复用这个函数，
+ * 否则会与标题各按一套规则取色。
  */
 internal fun TitleBar.topBarContentColor(): Int {
+    val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
+    val wallpaper = TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme)
+        ?.takeIf { config.style == TopBarConfig.STYLE_REGULAR }
     return resolveTopBarContentColor(
         context = context,
         topBarTheme = topBarTheme,
-        topBarBackground = background.resolveSolidColor(),
+        // 叠了壁纸时底色已被盖住，交给 topBarWallpaperLuminance 判定
+        topBarBackground = if (wallpaper == null) background.resolveSolidColor() else null,
+        topBarWallpaperLuminance = wallpaper?.let { ThemeConfig.getImageLuminance(it.absolutePath) },
     )
+}
+
+/**
+ * 只重算顶栏前景色，不改背景。
+ *
+ * 供"顶栏背景被调用方另行改掉"的页面使用：书籍详情页与音频播放页会把顶栏改成透明以露出
+ * 封面/封面模糊底图，而 `applyTopBarConfig` 早已按"不透明底"算好了内容色——背景一改，
+ * 按底色取的深浅就过期了，标题会停在旧配色上、与随后重算的图标不同色。
+ */
+internal fun TitleBar.refreshTopBarContentColor() {
+    applyTopBarContentColor()
+    applyTopBarChildConfig()
 }
 
 /** 解析背景中的纯色：含壁纸等非纯色图层时返回 null（无法判定亮度） */

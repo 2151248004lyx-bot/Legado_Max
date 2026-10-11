@@ -34,6 +34,7 @@ import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.widget.refreshTopBarContentColor
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyNavigationBarPadding
@@ -101,6 +102,8 @@ class AudioPlayActivity :
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.setBackgroundResource(R.color.transparent)
+        // 顶栏改成透明后重算前景色，避免标题沿用"不透明底"时的旧配色而与图标不同色（同书籍详情页）
+        binding.titleBar.refreshTopBarContentColor()
         AudioPlay.register(this)
         viewModel.titleData.observe(this) { name ->
             binding.titleBar.title = name

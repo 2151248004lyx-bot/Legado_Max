@@ -17,6 +17,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.widget.TitleBar
 import io.legado.app.ui.widget.applyTopBarConfig
 import io.legado.app.utils.applyTint
+import io.legado.app.ui.widget.topBarContentColor
 import io.legado.app.utils.observeEvent
 
 @Suppress("MemberVisibilityCanBePrivate")
@@ -70,7 +71,15 @@ abstract class BaseFragment(@LayoutRes layoutID: Int) : Fragment(layoutID) {
         supportToolbar?.let {
             it.menu.apply {
                 onCompatCreateOptionsMenu(this)
-                applyTint(requireContext())
+                // 与顶栏标题同色（TitleBar.topBarContentColor）：只传 context 会按"主题主色 /
+                // 背景色"取色，而先进 actionView 的图标（带长按的排序、视图切换等）在第一遍
+                // 就被定了色，之后 applyTopBarConfig 再 tint 也换不掉 actionView 里那份 Drawable
+                applyTint(
+                    requireContext(),
+                    tintColor = view
+                        ?.findViewById<TitleBar>(R.id.title_bar)
+                        ?.topBarContentColor(),
+                )
             }
 
             it.setOnMenuItemClickListener { item ->

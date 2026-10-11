@@ -32,9 +32,9 @@ import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.Theme
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.lib.theme.ThemeStateStore
-import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.transparentNavBar
@@ -87,14 +87,16 @@ fun pageTopBarColors(): PageTopBarColors {
     val containerColor = TopBarConfig.withOpacity(backgroundColor, alphaPercent)
     val wallpaperFile = TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme)
         ?.takeIf { !transparentNavBar && config.style == TopBarConfig.STYLE_REGULAR }
-    // 内容色与 View 侧 TitleBar 走同一个入口（见 resolveTopBarContentColor）：传入顶栏自身底色，
-    // 由它决定"按底色取"还是"回退到页面声明 / 窗口背景（壁纸）"。
-    // 顶栏自带壁纸时底色无从判定，传 null；顶栏透明时同样传 null 的等价路径（alpha 为 0）
+    // 内容色与 View 侧 TitleBar 走同一个入口（见 resolveTopBarContentColor）：传入顶栏自身底色
+    // 与顶栏壁纸亮度，由它决定"按底色/壁纸取"还是"回退到页面声明 / 窗口背景（壁纸）"。
+    // 顶栏透明时传 null 等价路径（alpha 为 0），会落到窗口背景亮度上
     val contentColor = Color(
         resolveTopBarContentColor(
             context = context,
             topBarTheme = Theme.Auto,
             topBarBackground = containerColor.takeIf { wallpaperFile == null },
+            topBarWallpaperLuminance = wallpaperFile
+                ?.let { ThemeConfig.getImageLuminance(it.absolutePath) },
         )
     )
     return PageTopBarColors(

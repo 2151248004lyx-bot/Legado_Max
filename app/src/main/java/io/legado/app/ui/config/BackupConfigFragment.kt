@@ -43,6 +43,7 @@ import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.applyTopBarTint
 import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.checkWrite
 import io.legado.app.utils.getPrefString
@@ -180,7 +181,7 @@ class BackupConfigFragment : PreferenceFragment(),
 
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.backup_restore, menu)
-        menu.applyTint(requireContext())
+        menu.applyTopBarTint(requireContext())
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {

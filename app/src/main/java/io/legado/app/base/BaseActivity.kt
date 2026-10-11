@@ -36,6 +36,7 @@ import io.legado.app.ui.widget.ReadAloudMiniBarController
 import io.legado.app.ui.widget.ReadAloudMiniBarHost
 import io.legado.app.ui.widget.TitleBar
 import io.legado.app.ui.widget.applyTopBarConfig
+import io.legado.app.ui.widget.topBarContentColor
 import io.legado.app.ui.debuglog.DebugFloatingBallManager
 import io.legado.app.ui.debuglog.DebugLogPanelDialog
 import io.legado.app.utils.ColorUtils
@@ -163,7 +164,16 @@ abstract class BaseActivity<VB : ViewBinding>(
 
     final override fun onCreateOptionsMenu(menu: Menu): Boolean {
         val bool = onCompatCreateOptionsMenu(menu)
-        menu.applyTint(this, toolBarTheme)
+        // 顶栏菜单图标必须与标题同色：这里传入顶栏的内容色（按顶栏实际底色取），而不是只传主题——
+        // 只传主题时图标按"主题主色 / 背景色"取色，于是"我的"里的各个子界面（书源管理、目录规则、
+        // 替换净化、字典规则、主题设置、其它设置等）在自定义顶栏背景色、深色壁纸、墨水屏纸白顶栏
+        // 下会出现"标题深色、图标浅色"这类不一致
+        val titleBar = findViewById<TitleBar>(R.id.title_bar)
+        if (titleBar == null) {
+            menu.applyTint(this, toolBarTheme)
+        } else {
+            menu.applyTint(this, titleBar.topBarTheme, titleBar.topBarContentColor())
+        }
         return bool
     }
 

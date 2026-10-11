@@ -318,17 +318,16 @@ object ThemeConfig {
     private val bgLuminanceCache = object : LruCache<String, Float>(4) {}
 
     /**
-     * 窗口背景图（主界面壁纸）的平均亮度（0..1）；未配置背景图或解不出来时返回 null。
+     * 图片文件的平均亮度（0..1），按路径 + 修改时间 + 大小缓存；解不出来时返回 null。
      *
-     * 顶栏透明时文字与图标实际压在壁纸上，只按主题背景色判断深浅会在"浅色底 + 深色壁纸"
-     * 这类组合里取反（深色文字压深色壁纸），表现为顶栏文字/图标与底色撞色。这里按
-     * 路径 + 修改时间 + 大小缓存结果，顶栏在每个页面初始化时都会问一次，缓存后是 O(1)。
+     * 用于"压在图片上的文字该用深色还是浅色"（顶栏透明时压在主界面壁纸上、顶栏自带壁纸时
+     * 压在顶栏壁纸上）。解码失败的图也缓存成 -1：这类图在顶栏重组热路径上会被反复问到，
+     * 不缓存就会每次重新开流解码。
      */
-    fun getBgImageLuminance(context: Context): Float? {
-        val path = resolveBgImagePath(context) ?: return null
+    fun getImageLuminance(path: String): Float? {
         val file = File(path)
         val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}"
-        bgLuminanceCache.get(key)?.let { return it }
+        bgLuminanceCache.get(key)?.let { return it.takeIf { cached -> cached >= 0f } }
         val luminance = kotlin.runCatching {
             val sample = BitmapUtils
                 .decodeBitmap(path, bgLuminanceSampleSize, bgLuminanceSampleSize)
@@ -341,9 +340,20 @@ object ThemeConfig {
                 sum += AndroidXColorUtils.calculateLuminance(pixel)
             }
             (sum / pixels.size).toFloat()
-        }.getOrNull() ?: return null
-        bgLuminanceCache.put(key, luminance)
+        }.getOrNull()
+        bgLuminanceCache.put(key, luminance ?: -1f)
         return luminance
+    }
+
+    /**
+     * 窗口背景图（主界面壁纸）的平均亮度（0..1）；未配置背景图或解不出来时返回 null。
+     *
+     * 顶栏透明时文字与图标实际压在壁纸上，只按主题背景色判断深浅会在"浅色底 + 深色壁纸"
+     * 这类组合里取反（深色文字压深色壁纸），表现为顶栏文字/图标与底色撞色。
+     */
+    fun getBgImageLuminance(context: Context): Float? {
+        val path = resolveBgImagePath(context) ?: return null
+        return getImageLuminance(path)
     }
 
     /** 命中缓存返回独立副本（mutate），避免多窗口共享同一 Drawable 实例导致状态冲突 */

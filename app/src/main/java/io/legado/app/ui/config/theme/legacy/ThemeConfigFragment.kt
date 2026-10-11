@@ -45,6 +45,7 @@ import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.applyTopBarTint
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getPrefInt
@@ -162,7 +163,9 @@ class ThemeConfigFragment :
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.theme_config, menu)
         updateThemeModeMenuItem(menu)
-        menu.applyTint(requireContext())
+        // 与页面顶栏标题同色（见 Menu.applyTopBarTint）：此前按主题取色，日夜切换图标
+        // 会在浅色顶栏上停留成白色，和标题对不上
+        menu.applyTopBarTint(requireContext())
     }
 
     /**

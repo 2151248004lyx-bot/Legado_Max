@@ -37,8 +37,8 @@ import io.legado.app.ui.main.bookshelf.observeBookshelfTagSource
 import io.legado.app.ui.main.bookshelf.restoreTagSelection
 import io.legado.app.ui.main.bookshelf.style1.books.BooksFragment
 import io.legado.app.ui.widget.RoundedTagBarView
+import io.legado.app.ui.widget.topBarContentColor
 import io.legado.app.utils.isCreated
-import io.legado.app.utils.MenuExtensions
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.showDialogFragment
@@ -222,9 +222,10 @@ class BookshelfFragment1() :
     }
 
     private fun updateTitleColor() {
-        // 与右上角搜索/三点菜单图标同一取色逻辑（MenuExtensions.getMenuColor），
-        // 保证透明导航栏/顶栏明暗模式下分组名与图标颜色一致
-        val textColor = MenuExtensions.getMenuColor(requireContext(), binding.titleBar.topBarTheme)
+        // 与顶栏标题、右上角搜索/三点菜单图标同一取色入口（TitleBar.topBarContentColor），
+        // 分组名与箭头必须跟着顶栏实际底色走：此前按主题主色取，深色壁纸或自定义顶栏背景色下
+        // 会出现"分组名深色、图标浅色"，或分组名与顶栏底色撞色
+        val textColor = binding.titleBar.topBarContentColor()
         tvGroupName?.setTextColor(textColor)
         ivArrow?.setColorFilter(textColor)
     }

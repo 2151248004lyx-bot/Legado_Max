@@ -38,6 +38,7 @@ import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.applyTopBarTint
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -82,7 +83,7 @@ class CoverConfigFragment : PreferenceFragment(),
 
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.cover_config, menu)
-        menu.applyTint(requireContext())
+        menu.applyTopBarTint(requireContext())
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {

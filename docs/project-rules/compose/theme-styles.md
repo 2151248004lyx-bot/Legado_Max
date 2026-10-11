@@ -171,16 +171,19 @@ TopAppBar(
 
 > 顶栏里的标题、副标题、二级标签栏、搜索框、返回图标、菜单/overflow 图标**必须同色**，且颜色要跟着**顶栏实际压着的底色**走——两套取色路径（图标按主题主色、文字按顶栏背景）会直接表现为"文字与图标不同色"和"图标与底色撞色"。
 
-- **必须**走唯一入口 `resolveTopBarContentColor(context, topBarTheme, topBarBackground)`（`ui/widget/TitleBarConfig.kt`）：View 侧由 `TitleBar.topBarContentColor()` 调用，Compose 侧由 `pageTopBarColors()` 调用；`topBarBackground` 传**顶栏自身底色（含 alpha）**，顶栏完全透明、自带壁纸或底色解析不出来时传 `null`。
-- 取色规则（按可靠性排序，实现在 `resolveTopBarContentColor` 内）：① 顶栏有自己的底色 → 与窗口背景合成后按亮度取深浅，**优先于**页面写死的 `themeMode`；② 顶栏没有底色 → 页面显式声明的 `themeMode="dark/light"` 说了算；③ 都没有 → 按**顶栏背后实际显示的窗口背景**取色：有主界面壁纸时用壁纸平均亮度（`ThemeConfig.getBgImageLuminance`，按路径+修改时间缓存），没有壁纸时用主题背景色。
-- **禁止**新增第二处取色：图标着色（`TitleBar.attachToActivity`）、标签栏/搜索框（`applyTopBarChildConfig`）都**必须**复用 `topBarContentColor()`，不得再出现 `getMenuColor(context, topBarTheme)` 或 `context.primaryTextColor` 直连。
+- **必须**走唯一入口 `resolveTopBarContentColor(context, topBarTheme, topBarBackground, topBarWallpaperLuminance)`（`ui/widget/TitleBarConfig.kt`）：View 侧由 `TitleBar.topBarContentColor()` 调用，Compose 侧由 `pageTopBarColors()` 调用；`topBarBackground` 传**顶栏自身底色（含 alpha）**，顶栏完全透明或底色解析不出来时传 `null`；`topBarWallpaperLuminance` 传**顶栏自带壁纸的平均亮度**，没叠壁纸时传 `null`。
+- 取色规则（按可靠性排序，实现在 `resolveTopBarContentColor` 内）：① 顶栏自带壁纸 → 按壁纸平均亮度取深浅（壁纸压在最上面）；② 顶栏有自己的底色 → 与窗口背景合成后按亮度取深浅，**优先于**页面写死的 `themeMode`；③ 顶栏没有底色 → 页面显式声明的 `themeMode="dark/light"` 说了算（注意 `MenuExtensions.getMenuColor` 在"透明底栏"开启时会忽略该声明、改按 `context.backgroundColor` 亮度取色，这是既有行为）；④ 都没有 → 按**顶栏背后实际显示的窗口背景**取色：有主界面壁纸时用壁纸平均亮度（`ThemeConfig.getBgImageLuminance`，缓存键为路径 + 修改时间 + 文件大小），没有壁纸时用主题背景色。
+- 亮度采样统一走 `ThemeConfig.getImageLuminance(path)`（24×24 缩略图，失败也缓存，避免重组热路径反复解码）；半透明顶栏与壁纸合成时用"壁纸平均亮度对应的黑白代表色"参与混合，是刻意的近似。
+- **禁止**新增第二处取色：图标着色（`TitleBar.attachToActivity`）、标签栏/搜索框（`applyTopBarChildConfig`）、顶栏内的自定义子视图（如书架的分组名与箭头，见 `BookshelfFragment1.updateTitleColor`）都**必须**复用 `topBarContentColor()`，不得再出现 `getMenuColor(context, topBarTheme)` 或 `context.primaryTextColor` 直连。
+- **必须**：页面顶栏的菜单（含 `SearchView` 形式的 actionView）用 `Menu.applyTopBarTint(context)`（`utils/MenuExtensions.kt`）着色，**不要**用 `applyTint(context)`——后者按"主题主色 / 背景色"取色，与标题不同源。"我的"里的子界面正是这种"标题在 Activity 的 TitleBar 上、菜单在 Fragment 的 MenuProvider 里"的结构，`applyTint(context)` 还会在 Activity 之后执行并盖掉正确取色，表现为"标题深色、图标与搜索框浅色"；只有对话框这类没有页面顶栏的场景才继续用 `applyTint`。
+- 顶栏背景被调用方另行改掉的页面（书籍详情页/音频播放页把顶栏改透明露出封面），改完背景**必须**调 `TitleBar.refreshTopBarContentColor()` 重算前景色，否则标题会停在"不透明底"时的旧配色上、与随后重算的图标不同色。
 - 主界面与"我的"子界面的顶栏常压在**主界面壁纸**上（顶栏透明 + 页面背景色透明），只看 `context.backgroundColor` 会在"浅色背景色 + 深色壁纸"（或反之）时取反，这是顶栏撞色的主要来源。
 
 #### 7.7.5 有意例外（改前必读，禁止"修掉"）
 
 以下两处顶栏**有意**不走统一主题，属于设计决策而非 bug，**禁止**在无需求变更时把它们"接入"统一色：
 
-- **书籍详情页**（`ui/book/info/BookInfoActivity.kt`）：顶栏被强制为透明（`binding.titleBar.setBackgroundResource(R.color.transparent)`），使封面图从顶栏后方露出。改成统一色会破坏封面展示。
+- **书籍详情页**（`ui/book/info/BookInfoActivity.kt`）：顶栏被强制为透明（`binding.titleBar.setBackgroundResource(R.color.transparent)`），使封面图从顶栏后方露出。改成统一色会破坏封面展示；但**前景色**仍走统一入口——改完背景要调 `refreshTopBarContentColor()` 重算（见 §7.7.4），否则标题与图标会不同色。
 - **书籍阅读页**（`ui/book/read/ReadMenu.kt`）：`view_read_menu.xml` 中 TitleBar 声明 `skipTopBarConfig="true"`。immersive 菜单顶栏跟随**阅读页背景色**（`ReadBookConfig.durConfig.curBgStr()`），非 immersive 用 `primaryColor`——跟随阅读主题是有意为之。
 
 > 若确有需求要统一这两处（如"阅读页也想用全局顶栏壁纸"），需作为独立需求评审，禁止顺手改。

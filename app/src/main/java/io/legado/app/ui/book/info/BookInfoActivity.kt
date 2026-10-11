@@ -142,6 +142,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.legado.app.ui.theme.LegadoTheme
 import io.legado.app.ui.widget.components.BookBottomSheet
+import io.legado.app.ui.widget.refreshTopBarContentColor
 
 class BookInfoActivity :
     VMBaseActivity<ActivityBookInfoBinding, BookInfoViewModel>(toolBarTheme = Theme.Dark, showOpenMenuIcon = false),
@@ -324,6 +325,9 @@ class BookInfoActivity :
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         register(this)
         binding.titleBar.setBackgroundResource(R.color.transparent)
+        // 顶栏被改成透明（露出封面底图）后必须重算前景色：applyTopBarConfig 是按"不透明底"
+        // 算的内容色，不重算会让标题停在旧配色上，与随后重算的图标不同色、也可能与底图撞色
+        binding.titleBar.refreshTopBarContentColor()
         binding.refreshLayout?.setColorSchemeColors(accentColor)
         binding.arcView?.setBgColor(backgroundColor)
         binding.llContentBg?.setBackgroundColor(backgroundColor)

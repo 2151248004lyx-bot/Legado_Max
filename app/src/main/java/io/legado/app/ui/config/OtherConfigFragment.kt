@@ -43,6 +43,7 @@ import io.legado.app.ui.blockrule.BlockRuleConfigDialog
 import io.legado.app.ui.debuglog.DebugFloatingBallManager
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.applyTopBarTint
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.postEvent
@@ -481,7 +482,9 @@ class OtherConfigFragment : PreferenceFragment(),
 
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.config_other, menu)
-        menu.applyTint(requireContext())
+        // 与页面顶栏标题同色（见 Menu.applyTopBarTint）：只按主题取色会让搜索框与各项图标
+        // 停留在浅色，和深色的标题对不上
+        menu.applyTopBarTint(requireContext())
         val searchItem = menu.findItem(R.id.menu_search)
         val searchView = searchItem?.actionView as? SearchView
         searchView?.apply {

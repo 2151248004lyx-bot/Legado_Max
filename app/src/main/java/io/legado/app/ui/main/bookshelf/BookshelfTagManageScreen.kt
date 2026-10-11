@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.data.dao.BookTagInfo
 import io.legado.app.help.book.BookTagManagement
+import io.legado.app.ui.theme.pageTopBarBackground
+import io.legado.app.ui.theme.pageTopBarColors
 import io.legado.app.ui.widget.components.dialog.AppAdaptiveDialog
 
 /**
@@ -102,7 +105,12 @@ internal fun BookshelfTagManageScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
+            // 顶栏走统一的 pageTopBarColors（见 theme-styles.md §7.7.1）：容器色与前景色都必须
+            // 来自 TopBarConfig，否则这个子界面的顶栏会跟着 MaterialTheme 默认色走，
+            // 与本仓库其它页面不一致，也会在深色壁纸/自定义顶栏配色的主题下与底色撞色
+            val topBarColors = pageTopBarColors()
             TopAppBar(
+                modifier = Modifier.pageTopBarBackground(topBarColors),
                 title = {
                     Text(
                         text = stringResource(R.string.bookshelf_tag_manage),
@@ -143,7 +151,11 @@ internal fun BookshelfTagManageScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    navigationIconContentColor = topBarColors.contentColor,
+                    titleContentColor = topBarColors.contentColor,
+                    actionIconContentColor = topBarColors.contentColor,
                 ),
             )
         },
