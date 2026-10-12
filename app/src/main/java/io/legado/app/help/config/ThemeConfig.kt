@@ -314,36 +314,110 @@ object ThemeConfig {
     /** 背景图亮度采样尺寸：只需判断整体偏亮还是偏暗，24x24 足够而解码开销可忽略 */
     private const val bgLuminanceSampleSize = 24
 
-    /** 背景图签名 → 平均亮度。容量按日/夜与前后两张图留余量 */
-    private val bgLuminanceCache = object : LruCache<String, Float>(4) {}
+    /**
+     * 居中裁切采样时的高度比例下限。
+     *
+     * 顶部/底栏这类"宽条"容器上，窄高图按宽高比算出来的可见条带可能只剩一两行采样像素，
+     * 平均值会随图片内容抖动；取个下限保证采样面足够大。
+     */
+    private const val cropBandMinFraction = 0.2f
 
     /**
-     * 图片文件的平均亮度（0..1），按路径 + 修改时间 + 大小缓存；解不出来时返回 null。
+     * 图片采样结果：平均亮度与平均色。
      *
-     * 用于"压在图片上的文字该用深色还是浅色"（顶栏透明时压在主界面壁纸上、顶栏自带壁纸时
-     * 压在顶栏壁纸上）。解码失败的图也缓存成 -1：这类图在顶栏重组热路径上会被反复问到，
-     * 不缓存就会每次重新开流解码。
+     * 同一趟解码同时算出两者——"图是深是浅"与"图是什么颜色"是同一个采样，
+     * 分成两次开流既浪费也容易让两处结论不一致。
      */
-    fun getImageLuminance(path: String): Float? {
+    private class ImageSample(val luminance: Float, val averageColor: Int)
+
+    /** 采样失败（图片损坏/解不出来）的占位：亮度取负值，[getImageLuminance] 据此返回 null */
+    private val failedImageSample = ImageSample(-1f, 0)
+
+    /** 图片签名（路径 + 修改时间 + 大小 + 裁切比例）→ 采样结果。容量按日/夜与前后两张图留余量 */
+    private val bgSampleCache = object : LruCache<String, ImageSample>(8) {}
+
+    /**
+     * 解码缩略图并采样平均亮度与平均色；结果按路径 + 修改时间 + 大小 + 裁切比例缓存，失败也缓存。
+     *
+     * 这类图会在顶栏重组热路径上被反复问到，不缓存就会每次重新开流解码。
+     *
+     * @param cropAspectRatio 非空且为正时，只统计**居中裁切**成该宽高比的那条横向区域
+     *   （见 [getImageAverageColor] 的说明）；null 表示按整图统计。
+     */
+    private fun sampleImage(path: String, cropAspectRatio: Float?): ImageSample {
         val file = File(path)
-        val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}"
-        bgLuminanceCache.get(key)?.let { return it.takeIf { cached -> cached >= 0f } }
-        val luminance = kotlin.runCatching {
-            val sample = BitmapUtils
+        val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}|${cropAspectRatio ?: 0f}"
+        bgSampleCache.get(key)?.let { return it }
+        val sample = kotlin.runCatching {
+            val bitmap = BitmapUtils
                 .decodeBitmap(path, bgLuminanceSampleSize, bgLuminanceSampleSize)
-                ?: return null
-            val pixels = IntArray(sample.width * sample.height)
-            sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
-            sample.recycle()
-            var sum = 0.0
-            for (pixel in pixels) {
-                sum += AndroidXColorUtils.calculateLuminance(pixel)
+                ?: return@runCatching failedImageSample
+            val width = bitmap.width
+            val height = bitmap.height
+            if (width <= 0 || height <= 0) return@runCatching failedImageSample
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            bitmap.recycle()
+            // center-crop 显示时纵向露出的比例：可见高度 = 图片宽 / 目标宽高比
+            val bandFraction = cropAspectRatio
+                ?.takeIf { it > 0f }
+                ?.let { (width / it) / height }
+                ?.coerceIn(cropBandMinFraction, 1f)
+                ?: 1f
+            val bandHeight = (height * bandFraction + 0.5f).toInt().coerceIn(1, height)
+            val top = (height - bandHeight) / 2
+            var luminanceSum = 0.0
+            var red = 0L
+            var green = 0L
+            var blue = 0L
+            var count = 0
+            for (y in top until top + bandHeight) {
+                val rowStart = y * width
+                for (x in 0 until width) {
+                    val pixel = pixels[rowStart + x]
+                    luminanceSum += AndroidXColorUtils.calculateLuminance(pixel)
+                    red += Color.red(pixel)
+                    green += Color.green(pixel)
+                    blue += Color.blue(pixel)
+                    count++
+                }
             }
-            (sum / pixels.size).toFloat()
-        }.getOrNull()
-        bgLuminanceCache.put(key, luminance ?: -1f)
-        return luminance
+            ImageSample(
+                luminance = (luminanceSum / count).toFloat(),
+                averageColor = Color.rgb(
+                    (red / count).toInt(),
+                    (green / count).toInt(),
+                    (blue / count).toInt(),
+                ),
+            )
+        }.getOrDefault(failedImageSample)
+        bgSampleCache.put(key, sample)
+        return sample
     }
+
+    /**
+     * 图片文件的平均亮度（0..1），解不出来时返回 null。
+     *
+     * 用于"压在图片上的文字该用深色还是浅色"（顶栏透明时压在主界面壁纸上）。
+     */
+    fun getImageLuminance(path: String): Float? =
+        sampleImage(path, cropAspectRatio = null).luminance.takeIf { it >= 0f }
+
+    /**
+     * 图片文件的平均色（不含 alpha），解不出来时返回 null。
+     *
+     * 与 [getImageLuminance] 同一份采样。亮度只能回答"图是深是浅"；当这张图是**半透明压在半透明
+     * 底色上**时（顶栏壁纸就是这样），必须先按同一套透明度把两侧合成成一块颜色，才能判深浅。
+     *
+     * @param cropAspectRatio 非空时只统计居中裁切成该宽高比的区域。图片按 center-crop 铺开时四边
+     *   根本显示不出来，而宽图上下常带留白/黑边——按整图平均会把这些从不显示的区域算进去，
+     *   把"实际很亮"的图判成暗图（2026-10-12 的顶栏白字压浅底就是这个原因）。
+     *   传 null 表示按整图统计。
+     */
+    fun getImageAverageColor(path: String, cropAspectRatio: Float? = null): Int? =
+        sampleImage(path, cropAspectRatio)
+            .takeIf { it.luminance >= 0f }
+            ?.averageColor
 
     /**
      * 窗口背景图（主界面壁纸）的平均亮度（0..1）；未配置背景图或解不出来时返回 null。

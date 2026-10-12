@@ -48,6 +48,9 @@ object TopBarConfig {
     private const val activeDayKey = PreferKey.topBarPackageDay
     private const val activeNightKey = PreferKey.topBarPackageNight
 
+    /** 顶栏宽高比的经验估计（手机顶栏约 4:1 ~ 7:1，取中间值）：用来估计壁纸纵向露出多少，见 [wallpaperAverageColor] */
+    private const val topBarAspectRatio = 5f
+
     /** [currentEntry] 的读取缓存：key 含日夜、目录名与快照文件签名 */
     private var cachedEntry: Pair<String, Entry>? = null
 
@@ -343,6 +346,24 @@ object TopBarConfig {
 
     fun resolveBackgroundColor(config: Config): Int {
         return config.backgroundColor ?: defaultBackgroundColor(config.isNightMode)
+    }
+
+    /**
+     * 顶栏壁纸的平均色（不含 alpha），没壁纸或解不出来时返回 null。
+     *
+     * 供顶栏前景取色使用（见 `resolveTopBarContentColor`）：壁纸是**半透明压在顶栏底色之上**的，
+     * 只看壁纸本身的深浅会把"44% 透明壁纸 + 米白底色"判成深底，于是顶栏配上白字压在米白底上
+     * ——2026-10-12 反馈的"顶栏文字看不清"就是这个原因。取色方拿到平均色后再按 wallpaperAlpha 合成。
+     *
+     * 平均色按 [topBarAspectRatio] 取"居中裁切后实际会显示"的那条区域：顶栏又宽又扁，
+     * 壁纸纵向只露出中间一条，宽图上下常见的留白/黑边根本不在顶栏上。
+     */
+    fun wallpaperAverageColor(wallpaperFile: File?): Int? {
+        if (wallpaperFile == null) return null
+        return ThemeConfig.getImageAverageColor(
+            path = wallpaperFile.absolutePath,
+            cropAspectRatio = topBarAspectRatio,
+        )
     }
 
     fun resolveCornerScale(config: Config): Float {

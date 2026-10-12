@@ -158,32 +158,28 @@ private fun TitleBar.applyTopBarContentColor(contentColor: Int = topBarContentCo
  * 于是自定义顶栏背景色与"透明顶栏压壁纸"这两种场景都会翻车）。
  *
  * 规则（按可靠性排序）：
- * 1. 顶栏有自己的底色（不透明或半透明）→ 与窗口背景合成后按亮度取深浅。这条**优先于**页面
- *    写死的 [topBarTheme]：顶栏底色是主题/用户配出来的，写死深浅会配出"纸白顶栏压白图标"。
+ * 1. 顶栏底层（底色 + 可选的顶栏壁纸，两层各带透明度）合成出来不是全透明 → 按合成结果的亮度
+ *    取深浅。这条**优先于**页面写死的 [topBarTheme]：顶栏底色是主题/用户配出来的，写死深浅会
+ *    配出"纸白顶栏压白图标"。合成必须逐层做：只拿壁纸本身的深浅判定，会把"半透明壁纸压在不透明
+ *    浅底色上"判成深底而配上白字（2026-10-12 反馈的"顶栏文字看不清"）。
  * 2. 顶栏完全没有底色（"顶栏颜色透明" / 未配顶栏背景）→ 页面显式声明的 [topBarTheme] 说了算
  *    （书籍详情页这类透明顶栏底下是封面图，亮度无从判定）。
  * 3. 顶栏没底色、页面也没声明 → 按顶栏背后实际显示的窗口背景取色：有主界面壁纸时用壁纸的
  *    平均亮度，没有壁纸时用主题背景色。
  *
  * @param topBarBackground 顶栏自身底色（含 alpha）；顶栏完全透明或底色解析不出来时传 null
- * @param topBarWallpaperLuminance 顶栏自带壁纸的平均亮度；没叠壁纸时传 null。
- *   壁纸压在底色之上，此时按壁纸亮度取色最准（否则会退到"页面声明 / 窗口背景"而取错）
+ * @param topBarWallpaperColor 顶栏自带壁纸的平均色（**已按 wallpaperAlpha 带 alpha**），
+ *   用 `TopBarConfig.wallpaperAverageColor(file)?.let { TopBarConfig.withOpacity(it, alpha) }` 取得；
+ *   没叠壁纸时传 null。壁纸压在底色之上，必须与底色合成后再判深浅。
  */
 fun resolveTopBarContentColor(
     context: Context,
     topBarTheme: Theme,
     topBarBackground: Int?,
-    topBarWallpaperLuminance: Float? = null,
+    topBarWallpaperColor: Int? = null,
 ): Int {
-    if (topBarWallpaperLuminance != null) {
-        return context.getPrimaryTextColor(topBarWallpaperLuminance > 0.5f)
-    }
-    if (topBarBackground != null && Color.alpha(topBarBackground) > 0) {
-        val solid = if (Color.alpha(topBarBackground) == 255) {
-            topBarBackground
-        } else {
-            ColorUtils.compositeColors(topBarBackground, windowBackgroundColor(context))
-        }
+    val solid = resolveTopBarSurfaceColor(context, topBarBackground, topBarWallpaperColor)
+    if (solid != null) {
         // 背景越亮文字越深：亮背景(>0.5)用深色文字，暗背景用浅色文字。
         // 与 MenuExtensions.getMenuColor 透明导航栏分支的取色约定保持一致。
         return context.getPrimaryTextColor(ColorUtils.calculateLuminance(solid) > 0.5)
@@ -192,6 +188,31 @@ fun resolveTopBarContentColor(
         return MenuExtensions.getMenuColor(context, topBarTheme)
     }
     return context.getPrimaryTextColor(windowBackgroundLuminance(context) > 0.5f)
+}
+
+/**
+ * 顶栏前景实际压着的那块颜色：底色与壁纸层依次压在窗口背景之上，逐层合成。
+ *
+ * 顶栏底色与顶栏壁纸都是**半透明**的（用户会把壁纸透明度调低），只取其中一层判深浅都不成立——
+ * 必须像真正绘制那样一层层压上去（LayerDrawable 的绘制顺序即此顺序）。
+ * 两层都不可用（全透明或解析不出）时返回 null，交给调用方按页面声明 / 窗口背景回退。
+ */
+private fun resolveTopBarSurfaceColor(
+    context: Context,
+    topBarBackground: Int?,
+    topBarWallpaperColor: Int?,
+): Int? {
+    var surface: Int? = null
+    if (topBarBackground != null && Color.alpha(topBarBackground) > 0) {
+        surface = ColorUtils.compositeColors(topBarBackground, windowBackgroundColor(context))
+    }
+    if (topBarWallpaperColor != null && Color.alpha(topBarWallpaperColor) > 0) {
+        surface = ColorUtils.compositeColors(
+            topBarWallpaperColor,
+            surface ?: windowBackgroundColor(context),
+        )
+    }
+    return surface
 }
 
 /** 顶栏背后窗口背景的代表色：有主界面壁纸时按壁纸平均亮度取黑白，否则用主题背景色 */
@@ -216,20 +237,19 @@ private fun windowBackgroundLuminance(context: Context): Float {
  * 顶栏内容颜色：按顶栏自身底色取色（见 [resolveTopBarContentColor]），
  * 顶栏透明时回落到窗口背景（壁纸）亮度。
  *
+ * 取色依据直接来自 [background] 这块 Drawable——底色与壁纸各自带透明度、以 LayerDrawable
+ * 逐层叠好，由 [resolveSolidColor] 逐层合成回一块代表色（见该函数说明）。这样"顶栏背景被谁
+ * 改过"（透明导航栏、墨水屏纸白、页面自己置透明）都能自动跟着走，不必在这里再认一遍分支。
+ *
  * internal 而非 private：`TitleBar.attachToActivity` 在窗口附加后还要给返回/菜单图标上色，
  * 书架的顶栏分组选择器等自定义子视图也要按同一规则取色，它们都必须复用这个函数，
  * 否则会与标题各按一套规则取色。
  */
 internal fun TitleBar.topBarContentColor(): Int {
-    val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
-    val wallpaper = TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme)
-        ?.takeIf { config.style == TopBarConfig.STYLE_REGULAR }
     return resolveTopBarContentColor(
         context = context,
         topBarTheme = topBarTheme,
-        // 叠了壁纸时底色已被盖住，交给 topBarWallpaperLuminance 判定
-        topBarBackground = if (wallpaper == null) background.resolveSolidColor() else null,
-        topBarWallpaperLuminance = wallpaper?.let { ThemeConfig.getImageLuminance(it.absolutePath) },
+        topBarBackground = background.resolveSolidColor(),
     )
 }
 
@@ -245,16 +265,25 @@ internal fun TitleBar.refreshTopBarContentColor() {
     applyTopBarChildConfig()
 }
 
-/** 解析背景中的纯色：含壁纸等非纯色图层时返回 null（无法判定亮度） */
+/**
+ * 解析背景代表的纯色（含 alpha）：底色/壁纸这些图层自底向顶逐个合成。
+ *
+ * 顶栏背景是「圆角底色 + 顶栏壁纸」两层叠出来的 LayerDrawable，两层都带透明度；只认"整块是
+ * 不是纯色"会直接判不出颜色，退到按页面声明/窗口背景取色，于是半透明壁纸那一层被彻底忽略
+ * （2026-10-12 的顶栏白字压浅底）。逐层合成后，两层各自的不透明度与颜色都会算进去。
+ * 解析不出的图层（自定义 Drawable、API < 24 的渐变）跳过不参与合成；全都解析不出时返回 null。
+ */
 private fun Drawable?.resolveSolidColor(): Int? {
     if (this == null) return null
     return when (this) {
         is ColorDrawable -> color
         is GradientDrawable -> resolveGradientSolidColor()
+        is TopBarWallpaperDrawable -> solidColor
         is LayerDrawable -> {
             var resolved: Int? = null
             for (i in 0 until numberOfLayers) {
-                resolved = getDrawable(i).resolveSolidColor() ?: return null
+                val layer = getDrawable(i).resolveSolidColor() ?: continue
+                resolved = resolved?.let { ColorUtils.compositeColors(layer, it) } ?: layer
             }
             resolved
         }
@@ -411,6 +440,9 @@ private fun TitleBar.bitmapLayer(file: File, alphaPercent: Int, radius: Float): 
         bitmap = bitmap,
         radius = radius,
         alphaPercent = alphaPercent,
+        // 前景取色要把壁纸平均色与底色合成后再判深浅（见 resolveTopBarContentColor），
+        // 这里顺带把平均色带上，取色时不必再按文件路径查一次
+        averageColor = TopBarConfig.wallpaperAverageColor(file),
     )
 }
 
@@ -423,6 +455,8 @@ private class TopBarWallpaperDrawable(
     private val bitmap: Bitmap,
     private val radius: Float,
     alphaPercent: Int,
+    /** 壁纸平均色（不含 alpha），供取色方与底色合成；解不出来时为 null */
+    private val averageColor: Int?,
 ) : Drawable() {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -432,6 +466,18 @@ private class TopBarWallpaperDrawable(
     private val rect = RectF()
     private val matrix = Matrix()
     private val path = Path()
+
+    /**
+     * 代表色（含 alpha）：平均色按**当前**透明度合成。
+     *
+     * 取色方（[resolveSolidColor]）据此把壁纸层与底色层叠起来判深浅；用当前 alpha 而非构造时
+     * 记下的值，是为了之后有人对此 Drawable 调 [setAlpha] 时取色不会停在旧透明度上。
+     * 解不出平均色时为 null，解析方会跳过这一层（回退顶栏底色）。
+     */
+    val solidColor: Int?
+        get() = averageColor?.let {
+            Color.argb(paint.alpha, Color.red(it), Color.green(it), Color.blue(it))
+        }
 
     override fun draw(canvas: Canvas) {
         val bounds = bounds
