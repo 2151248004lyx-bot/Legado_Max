@@ -33,6 +33,7 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.toastOnUi
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import splitties.init.appCtx
@@ -419,7 +420,9 @@ sendToClip(text)
     private fun upGroupMenu() = groupMenu?.transaction { menu ->
         menu.removeGroup(R.id.source_group)
         groups.forEach {
-            menu.add(R.id.source_group, Menu.NONE, Menu.NONE, it)
+            // 分组名是用户自定义的（可能带表情符号），且这个下拉是 AppCompat 自己开的窗口，
+            // 挂不了整层灰阶，只能把标题本身按灰阶绘制（见 CharSequence.eInkGrayscale）
+            menu.add(R.id.source_group, Menu.NONE, Menu.NONE, it.eInkGrayscale())
         }
     }
 

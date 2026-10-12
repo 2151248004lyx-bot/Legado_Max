@@ -17,6 +17,7 @@ import io.legado.app.data.appDb
 import io.legado.app.databinding.ActivityRssFavoritesBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.utils.gone
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
@@ -94,7 +95,9 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
     private fun upGroupsMenu() = groupsMenu?.let { subMenu ->
         subMenu.removeGroup(R.id.menu_group)
         groupList.forEachIndexed { index, it ->
-            subMenu.add(R.id.menu_group, Menu.NONE, index, it)
+            // 分组名是用户自定义的（可能带表情符号），且这个下拉是 AppCompat 自己开的窗口，
+            // 挂不了整层灰阶，只能把标题本身按灰阶绘制（见 CharSequence.eInkGrayscale）
+            subMenu.add(R.id.menu_group, Menu.NONE, index, it.eInkGrayscale())
         }
     }
 

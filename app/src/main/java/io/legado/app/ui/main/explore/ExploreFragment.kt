@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
+import io.legado.app.lib.theme.eInkGrayscale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
@@ -523,7 +524,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
         subMenu.removeGroup(R.id.menu_group_text)
         groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
+            // 分组名是用户自定义的，可能带表情符号；这个下拉是 AppCompat 内部创建的窗口，
+            // 挂不了整层灰阶，只能把标题本身按灰阶绘制（见 CharSequence.eInkGrayscale）
+            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it.eInkGrayscale())
         }
     }
 

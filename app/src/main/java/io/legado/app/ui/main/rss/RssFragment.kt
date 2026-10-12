@@ -31,6 +31,7 @@ import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.FragmentRssBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.blockrule.BlockRuleConfigDialog
 import io.legado.app.ui.login.SourceLoginActivity
@@ -294,7 +295,9 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
     private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
         subMenu.removeGroup(R.id.menu_group_text)
         groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
+            // 分组名是用户自定义的（可能带表情符号），且这个下拉是 AppCompat 自己开的窗口，
+            // 挂不了整层灰阶，只能把标题本身按灰阶绘制（见 CharSequence.eInkGrayscale）
+            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it.eInkGrayscale())
         }
     }
 

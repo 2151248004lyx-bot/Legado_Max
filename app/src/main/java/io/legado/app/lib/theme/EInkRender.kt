@@ -1,9 +1,14 @@
 package io.legado.app.lib.theme
 
 import android.app.Activity
+import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ReplacementSpan
 import android.view.View
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -13,6 +18,7 @@ import androidx.compose.ui.graphics.ColorFilter as ComposeColorFilter
 import androidx.compose.ui.graphics.ColorMatrix as ComposeColorMatrix
 import androidx.compose.ui.graphics.Paint
 import io.legado.app.help.config.AppConfig
+import kotlin.math.roundToInt
 
 /**
  * 墨水屏渲染的图片灰阶化工具（View 与 Compose 共用）。
@@ -128,5 +134,69 @@ fun Modifier.eInkGrayscale(): Modifier {
         )
         drawContent()
         drawContext.canvas.restore()
+    }
+}
+
+/**
+ * View 侧：把这段文本按墨水屏灰阶绘制。
+ *
+ * 与 [Modifier.eInkGrayscale] 同一个目的，用在**窗口另开、应用拿不到引用**的 View 文本上。
+ * 典型场景是 AppCompat 的菜单弹窗（发现页的分组下拉就是它）：窗口由框架内部创建，
+ * 应用连引用都没有，挂不了整层灰阶；而菜单项标题里可能带表情符号
+ * （用户把书源分组名写成「🎧有声」），那是字体里的彩色字形，不跟着主题色板走。
+ *
+ * 滤镜落在**这段文本自己的绘制**上：把文本绘制罩进一个离屏图层再合成，
+ * 所以作用范围恰好是这段文本，不依赖窗口。关掉墨水屏渲染时直接返回原文本，零开销。
+ *
+ * 传进来的文本若已经是 `Spannable`，在上面追加 span（不改写已有样式）。
+ */
+fun CharSequence.eInkGrayscale(): CharSequence {
+    val filter = EInkRender.androidFilterOrNull() ?: return this
+    val spannable = if (this is Spannable) this else SpannableString(this)
+    spannable.setSpan(GrayscaleSpan(filter), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    return spannable
+}
+
+/**
+ * 把 span 覆盖的文本用一层灰阶滤镜重画。
+ *
+ * 必须是 [ReplacementSpan]、不能只用 [MetricAffectingSpan] 改 paint：实测给文本 paint 挂
+ * `colorFilter` **不影响字体里的彩色表情字形**（它们走自己的绘制路径，不吃 paint 的滤镜），
+ * 只有把这段绘制整体落到离屏图层上再合成，滤镜才会罩住表情符号——与 Compose 侧
+ * [Modifier.eInkGrayscale] 的 `saveLayer` 同理。
+ *
+ * 代价是这段文本不再走系统默认的整行绘制，所以只用在菜单标题这类短文本上。
+ */
+private class GrayscaleSpan(private val filter: ColorFilter) : ReplacementSpan() {
+
+    override fun getSize(
+        paint: android.graphics.Paint,
+        text: CharSequence,
+        start: Int,
+        end: Int,
+        fm: android.graphics.Paint.FontMetricsInt?,
+    ): Int = paint.measureText(text, start, end).roundToInt()
+
+    override fun draw(
+        canvas: Canvas,
+        text: CharSequence,
+        start: Int,
+        end: Int,
+        x: Float,
+        top: Int,
+        y: Int,
+        bottom: Int,
+        paint: android.graphics.Paint,
+    ) {
+        val width = paint.measureText(text, start, end)
+        // 表情字形可能略微超出字体的 top/bottom，图层上下各留一点余量，避免被裁掉
+        val pad = (bottom - top) * 0.25f
+        val save = canvas.saveLayer(
+            x, top - pad, x + width, bottom + pad,
+            android.graphics.Paint().apply { colorFilter = filter },
+        )
+        // 转成 String 再画：避免 Canvas.drawText(CharSequence…) 又解析一遍 span（会递归回来）
+        canvas.drawText(text.subSequence(start, end).toString(), x, y.toFloat(), paint)
+        canvas.restoreToCount(save)
     }
 }
