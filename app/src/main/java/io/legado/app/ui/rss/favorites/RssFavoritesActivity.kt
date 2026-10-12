@@ -46,11 +46,11 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
 
     override fun onResume() {
         super.onResume()
-        //从ReadRssActivity退出时，判断是否需要重新定位tabLayout选中项
+        // 从ReadRssActivity退出时，判断是否需要重新定位tabLayout选中项
         if (currentGroup.isNotEmpty() && groupList.isNotEmpty()) {
             var item = groupList.indexOf(currentGroup)
             val currentItem = binding.viewPager.currentItem
-            //如果坐标没有变化，则结束
+            // 如果坐标没有变化，则结束
             if (item == currentItem) {
                 return
             }
@@ -70,7 +70,7 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             override fun onPageScrolled(
                 position: Int,
                 positionOffset: Float,
-                positionOffsetPixels: Int
+                positionOffsetPixels: Int,
             ) {
             }
 
@@ -79,7 +79,6 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             }
 
             override fun onPageScrollStateChanged(state: Int) {}
-
         })
         binding.tabLayout.setupWithViewPager(binding.viewPager)
         binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
@@ -141,7 +140,7 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             val item = binding.viewPager.currentItem
             val group = groupList[item]
             setMessage(
-                getString(R.string.sure_del) + "\n<" + group + ">" + getString(R.string.group)
+                getString(R.string.sure_del) + "\n<" + group + ">" + getString(R.string.group),
             )
             noButton()
             yesButton {
@@ -153,8 +152,8 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
     private fun deleteAll() {
         alert(R.string.draw) {
             setMessage(
-                getString(R.string.sure_del) + "\n<" + getString(R.string.all) + ">"
-                        + getString(R.string.favorite)
+                getString(R.string.sure_del) + "\n<" + getString(R.string.all) + ">" +
+                    getString(R.string.favorite),
             )
             noButton()
             yesButton {
@@ -163,25 +162,17 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
         }
     }
 
-    private inner class TabFragmentPageAdapter :
-        FragmentStatePagerAdapter(supportFragmentManager, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
+    private inner class TabFragmentPageAdapter : FragmentStatePagerAdapter(supportFragmentManager, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
-        override fun getItemPosition(`object`: Any): Int {
-            return POSITION_NONE
-        }
+        override fun getItemPosition(`object`: Any): Int = POSITION_NONE
 
-        override fun getPageTitle(position: Int): CharSequence {
-            return groupList[position]
-        }
+        override fun getPageTitle(position: Int): CharSequence = groupList[position]
 
         override fun getItem(position: Int): Fragment {
             val group = groupList[position]
             return RssFavoritesFragment(group)
         }
 
-        override fun getCount(): Int {
-            return groupList.size
-        }
-
+        override fun getCount(): Int = groupList.size
     }
 }

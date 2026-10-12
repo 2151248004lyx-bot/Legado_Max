@@ -29,10 +29,8 @@ class SearchSourceStatusDialog : BottomSheetDialogFragment() {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.dialog_search_source_status, container, false)
-    }
+        savedInstanceState: Bundle?,
+    ): View? = inflater.inflate(R.layout.dialog_search_source_status, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -70,7 +68,7 @@ class SearchSourceStatusDialog : BottomSheetDialogFragment() {
     }
 
     class SourceStatusAdapter(
-        private val onSourceClick: (SourceSearchRecord) -> Unit
+        private val onSourceClick: (SourceSearchRecord) -> Unit,
     ) : RecyclerView.Adapter<SourceStatusAdapter.VH>() {
         private var items = emptyList<SourceSearchRecord>()
 

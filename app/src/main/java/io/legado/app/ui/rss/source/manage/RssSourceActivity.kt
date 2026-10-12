@@ -20,8 +20,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ActivityRssSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.help.DirectLinkUpload
-
 import io.legado.app.utils.ACache
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.applyTint
@@ -31,7 +29,6 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
-import io.legado.app.utils.toastOnUi
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.lib.theme.primaryColor
@@ -52,7 +49,6 @@ import io.legado.app.utils.launch
 import io.legado.app.help.ExportResultHandler
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.sendToClip
-import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.share
 import io.legado.app.utils.showDialogFragment
@@ -73,7 +69,8 @@ import kotlinx.coroutines.launch
 /**
  * 订阅源管理
  */
-class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceViewModel>(),
+class RssSourceActivity :
+    VMBaseActivity<ActivityRssSourceBinding, RssSourceViewModel>(),
     PopupMenu.OnMenuItemClickListener,
     SelectActionBar.CallBack,
     RssSourceAdapter.CallBack {
@@ -114,7 +111,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
      * 是否按域名分组，使用 SharedPreferences 持久化保存
      */
     private var groupSourcesByDomain = appCtx.getPrefBoolean(PreferKey.rssSourceGroupByDomain, false)
-    
+
     /**
      * 域名缓存，避免重复提取
      */
@@ -132,9 +129,9 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         }
     }
     private val exportResult = registerForActivityResult(HandleFileContract()) {
-ExportResultHandler.handleExportResult(this, it, { text ->
-sendToClip(text)
-}, StringUtils.RSS_SOURCE)
+        ExportResultHandler.handleExportResult(this, it, { text ->
+            sendToClip(text)
+        }, StringUtils.RSS_SOURCE)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -291,7 +288,9 @@ sendToClip(text)
                 exportResult.launch {
                     mode = HandleFileContract.EXPORT
                     fileData = HandleFileContract.FileData(
-                        name, file, "application/json"
+                        name,
+                        file,
+                        "application/json",
                     )
                 }
             }
@@ -325,9 +324,7 @@ sendToClip(text)
             it.queryHint = getString(R.string.search_rss_source)
             it.clearFocus()
             it.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-                override fun onQueryTextSubmit(query: String?): Boolean {
-                    return false
-                }
+                override fun onQueryTextSubmit(query: String?): Boolean = false
 
                 override fun onQueryTextChange(newText: String?): Boolean {
                     upSourceFlow(newText)
@@ -464,7 +461,8 @@ sendToClip(text)
                     data.sortedWith(
                         compareBy<RssSource> { getSourceHost(it.sourceUrl) == "#" }
                             .thenBy { getSourceHost(it.sourceUrl) }
-                            .thenByDescending { it.lastUpdateTime })
+                            .thenByDescending { it.lastUpdateTime },
+                    )
                 } else if (sortAscending) {
                     when (sort) {
                         RssSourceSort.Name -> data.sortedWith { o1, o2 ->
@@ -511,7 +509,8 @@ sendToClip(text)
                     adapter.setItems(it, adapter.diffItemCallback)
                 }
                 itemTouchCallback.isCanDrag =
-                    sort == RssSourceSort.Default && !groupSourcesByDomain
+                    sort == RssSourceSort.Default &&
+                    !groupSourcesByDomain
                 tryLocateSource(it)
                 delay(100)
             }
@@ -551,14 +550,12 @@ sendToClip(text)
     override fun upCountView() {
         binding.selectActionBar.upCountView(
             adapter.selection.size,
-            adapter.itemCount
+            adapter.itemCount,
         )
     }
 
-    override fun getSourceHost(origin: String): String {
-        return hostMap.getOrPut(origin) {
-            NetworkUtils.getSubDomainOrNull(origin) ?: "#"
-        }
+    override fun getSourceHost(origin: String): String = hostMap.getOrPut(origin) {
+        NetworkUtils.getSubDomainOrNull(origin) ?: "#"
     }
 
     @SuppressLint("InflateParams")
@@ -581,7 +578,7 @@ sendToClip(text)
                     startActivity<WebViewActivity> {
                         putExtra("url", url)
                     }
-                }
+                },
             )
             customView { alertBinding.root }
             okButton {
@@ -592,7 +589,7 @@ sendToClip(text)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
                     showDialogFragment(
-                        ImportRssSourceDialog(it)
+                        ImportRssSourceDialog(it),
                     )
                 }
             }
@@ -639,5 +636,4 @@ sendToClip(text)
     override fun upOrder() {
         viewModel.upOrder()
     }
-
 }

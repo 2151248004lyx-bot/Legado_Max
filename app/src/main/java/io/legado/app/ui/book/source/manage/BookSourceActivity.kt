@@ -27,8 +27,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.databinding.ActivityBookSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.help.DirectLinkUpload
-
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.eInkGrayscale
@@ -39,7 +37,6 @@ import io.legado.app.model.Debug
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportUrlDialogHelper
 import io.legado.app.ui.book.search.SearchActivity
-import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.browser.WebViewActivity
@@ -85,7 +82,8 @@ import kotlinx.coroutines.launch
 /**
  * 书源管理界面
  */
-class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceViewModel>(),
+class BookSourceActivity :
+    VMBaseActivity<ActivityBookSourceBinding, BookSourceViewModel>(),
     PopupMenu.OnMenuItemClickListener,
     BookSourceAdapter.CallBack,
     SelectActionBar.CallBack,
@@ -122,9 +120,9 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
     private val exportDir = registerForActivityResult(HandleFileContract()) {
-ExportResultHandler.handleExportResult(this, it, { text ->
-sendToClip(text)
-}, StringUtils.BOOK_SOURCE)
+        ExportResultHandler.handleExportResult(this, it, { text ->
+            sendToClip(text)
+        }, StringUtils.BOOK_SOURCE)
     }
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         locateSourceUrl = intent.getStringExtra("locateSourceUrl")
@@ -295,7 +293,6 @@ sendToClip(text)
         searchView.setOnQueryTextListener(this)
     }
 
-
     private fun upBookSource(searchKey: String? = null) {
         sourceFlowJob?.cancel()
         sourceFlowJob = lifecycleScope.launch {
@@ -342,7 +339,8 @@ sendToClip(text)
                     data.sortedWith(
                         compareBy<BookSourcePart> { getSourceHost(it.bookSourceUrl) == "#" }
                             .thenBy { getSourceHost(it.bookSourceUrl) }
-                            .thenByDescending { it.lastUpdateTime })
+                            .thenByDescending { it.lastUpdateTime },
+                    )
                 } else if (isSortAscending) {
                     when (sort) {
                         BookSourceSort.Weight -> data.sortedBy { it.weight }
@@ -386,7 +384,7 @@ sendToClip(text)
                 }
             }.flowWithLifecycleAndDatabaseChange(
                 lifecycle,
-                table = AppDatabase.BOOK_SOURCE_TABLE_NAME
+                table = AppDatabase.BOOK_SOURCE_TABLE_NAME,
             ).catch {
                 AppLog.put("书源界面更新书源出错", it)
             }.flowOn(IO).conflate().collect { data ->
@@ -396,7 +394,8 @@ sendToClip(text)
                     adapter.setItems(data, adapter.diffItemCallback, !Debug.isChecking)
                 }
                 itemTouchCallback.isCanDrag =
-                    sort == BookSourceSort.Default && !isGroupSourcesByDomain
+                    sort == BookSourceSort.Default &&
+                    !isGroupSourcesByDomain
                 tryLocateSource(data)
                 delay(500)
             }
@@ -433,13 +432,12 @@ sendToClip(text)
         super.onPause()
     }
 
-
     private fun initLiveDataGroup() {
         lifecycleScope.launch {
             appDb.bookSourceDao.flowGroups()
                 .flowWithLifecycleAndDatabaseChange(
                     lifecycle,
-                    table = AppDatabase.BOOK_SOURCE_TABLE_NAME
+                    table = AppDatabase.BOOK_SOURCE_TABLE_NAME,
                 )
                 .conflate()
                 .distinctUntilChanged()
@@ -454,7 +452,7 @@ sendToClip(text)
             appDb.bookGroupDao.flowSelect()
                 .flowWithLifecycleAndDatabaseChange(
                     lifecycle,
-                    table = AppDatabase.BOOK_GROUP_TABLE_NAME
+                    table = AppDatabase.BOOK_GROUP_TABLE_NAME,
                 )
                 .conflate()
                 .distinctUntilChanged()
@@ -508,14 +506,14 @@ sendToClip(text)
                 adapter,
                 searchView.query?.toString(),
                 isSortAscending,
-                sort
+                sort,
             ) { file, name ->
                 exportDir.launch {
                     mode = HandleFileContract.EXPORT
                     fileData = HandleFileContract.FileData(
                         name,
                         file,
-                        "application/json"
+                        "application/json",
                     )
                 }
             }
@@ -524,7 +522,7 @@ sendToClip(text)
                 adapter,
                 searchView.query?.toString(),
                 isSortAscending,
-                sort
+                sort,
             ) { file, name ->
                 share(file)
             }
@@ -560,7 +558,7 @@ sendToClip(text)
             neutralButton(R.string.check_source_config)
             cancelButton()
         }
-        //手动设置监听 避免点击打开校验设置后对话框关闭
+        // 手动设置监听 避免点击打开校验设置后对话框关闭
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
             showDialogFragment<CheckSourceConfig>()
         }
@@ -654,7 +652,7 @@ sendToClip(text)
                     startActivity<WebViewActivity> {
                         putExtra("url", url)
                     }
-                }
+                },
             )
             customView { alertBinding.root }
             okButton {
@@ -689,7 +687,7 @@ sendToClip(text)
             adapter.notifyItemRangeChanged(
                 0,
                 adapter.itemCount,
-                bundleOf(Pair("checkSourceMessage", null))
+                bundleOf(Pair("checkSourceMessage", null)),
             )
             groups.forEach { group ->
                 if (group.contains("失效") && searchView.query.isEmpty()) {
@@ -709,13 +707,13 @@ sendToClip(text)
                         adapter.notifyItemRangeChanged(
                             0,
                             adapter.itemCount,
-                            bundleOf(Pair("checkSourceMessage", null))
+                            bundleOf(Pair("checkSourceMessage", null)),
                         )
                     } else {
                         adapter.notifyItemRangeChanged(
                             firstItem,
                             lastItem + 1,
-                            bundleOf(Pair("checkSourceMessage", null))
+                            bundleOf(Pair("checkSourceMessage", null)),
                         )
                     }
                     if (!Debug.isChecking) {
@@ -746,10 +744,8 @@ sendToClip(text)
             .upCountView(adapter.selection.size, adapter.itemCount)
     }
 
-    override fun getSourceHost(origin: String): String {
-        return hostMap.getOrPut(origin) {
-            NetworkUtils.getSubDomainOrNull(origin) ?: "#"
-        }
+    override fun getSourceHost(origin: String): String = hostMap.getOrPut(origin) {
+        NetworkUtils.getSubDomainOrNull(origin) ?: "#"
     }
 
     override fun onQueryTextChange(newText: String?): Boolean {
@@ -759,9 +755,7 @@ sendToClip(text)
         return false
     }
 
-    override fun onQueryTextSubmit(query: String?): Boolean {
-        return false
-    }
+    override fun onQueryTextSubmit(query: String?): Boolean = false
 
     override fun del(bookSource: BookSourcePart) {
         alert(R.string.draw) {
@@ -831,5 +825,4 @@ sendToClip(text)
             Debug.debugMessageMap.clear()
         }
     }
-
 }

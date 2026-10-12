@@ -50,7 +50,7 @@ data class PageTopBarColors(
     val cornerRadius: Dp = 0.dp,
     val shadowElevation: Dp = 0.dp,
     val wallpaperFile: File? = null,
-    val wallpaperAlpha: Float = 1f
+    val wallpaperAlpha: Float = 1f,
 )
 
 @Composable
@@ -97,7 +97,7 @@ fun pageTopBarColors(): PageTopBarColors {
             topBarBackground = containerColor,
             topBarWallpaperColor = TopBarConfig.wallpaperAverageColor(wallpaperFile)
                 ?.let { TopBarConfig.withOpacity(it, alphaPercent) },
-        )
+        ),
     )
     return PageTopBarColors(
         containerColor = Color(containerColor),
@@ -105,7 +105,7 @@ fun pageTopBarColors(): PageTopBarColors {
         cornerRadius = cornerRadius,
         shadowElevation = shadowElevation,
         wallpaperFile = wallpaperFile,
-        wallpaperAlpha = TopBarConfig.opacityToAlpha(alphaPercent) / 255f
+        wallpaperAlpha = TopBarConfig.opacityToAlpha(alphaPercent) / 255f,
     )
 }
 
@@ -113,7 +113,7 @@ fun pageTopBarColors(): PageTopBarColors {
 fun PageTopBarContainer(
     colors: PageTopBarColors,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier.pageTopBarBackground(colors)) {
         content()
@@ -124,7 +124,7 @@ fun PageTopBarContainer(
 fun Modifier.pageTopBarBackground(colors: PageTopBarColors): Modifier {
     val shape = RoundedCornerShape(
         bottomStart = colors.cornerRadius,
-        bottomEnd = colors.cornerRadius
+        bottomEnd = colors.cornerRadius,
     )
     return this
         .fillMaxWidth()
@@ -144,7 +144,7 @@ private fun Modifier.drawTopBarWallpaper(colors: PageTopBarColors): Modifier {
         wallpaper?.absolutePath,
         wallpaper?.lastModified(),
         targetWidth,
-        targetHeight
+        targetHeight,
     ) {
         wallpaper?.takeIf { it.exists() && it.isFile }?.let { file ->
             runCatching {
@@ -161,7 +161,7 @@ private fun Modifier.drawTopBarWallpaper(colors: PageTopBarColors): Modifier {
                 val dstHeight = size.height.roundToInt().coerceAtLeast(1)
                 val scale = max(
                     dstWidth / wallpaperBitmap.width.toFloat(),
-                    dstHeight / wallpaperBitmap.height.toFloat()
+                    dstHeight / wallpaperBitmap.height.toFloat(),
                 )
                 val srcWidth = (dstWidth / scale).roundToInt().coerceAtMost(wallpaperBitmap.width)
                 val srcHeight = (dstHeight / scale).roundToInt().coerceAtMost(wallpaperBitmap.height)
@@ -174,7 +174,7 @@ private fun Modifier.drawTopBarWallpaper(colors: PageTopBarColors): Modifier {
                     wallpaperBitmap,
                     Rect(srcLeft, srcTop, srcLeft + srcWidth, srcTop + srcHeight),
                     Rect(0, 0, dstWidth, dstHeight),
-                    paint
+                    paint,
                 )
             }
             drawContent()
@@ -204,9 +204,7 @@ private fun rememberTopBarConfigVersion(): Int {
 }
 
 @Composable
-fun pageCardContainerColor(): Color {
-    return MaterialTheme.colorScheme.surfaceVariant
-}
+fun pageCardContainerColor(): Color = MaterialTheme.colorScheme.surfaceVariant
 
 @Composable
 fun pageCardElevatedContainerColor(): Color {
@@ -228,9 +226,7 @@ fun pageCardElevatedContainerColor(): Color {
  * 暗色下不做加亮：首页那套同样只调 alpha，保持一致才能"像首页一样"。
  */
 @Composable
-fun pagePanelContainerColor(): Color {
-    return MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-}
+fun pagePanelContainerColor(): Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
 
 @Composable
 fun pageHeaderContainerColor(): Color {
@@ -296,6 +292,4 @@ fun pageMutedIconTint(): Color {
  * 使用 MaterialTheme 的 secondary 色作为顶栏背景色。
  */
 @Composable
-fun pageTopBarContainerColor(): Color {
-    return MaterialTheme.colorScheme.secondary
-}
+fun pageTopBarContainerColor(): Color = MaterialTheme.colorScheme.secondary

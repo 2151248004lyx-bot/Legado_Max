@@ -6,7 +6,6 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.SubMenu
 import android.view.View
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
 import androidx.compose.runtime.getValue
@@ -66,7 +65,6 @@ import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.openUrl
-import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
@@ -92,7 +90,8 @@ import kotlinx.coroutines.withContext
  * 新版为"源选择行 + 分类标签栏 + 文章列表"（[ModernRssContent]，参考 Legado_R 新版订阅），
  * 通过 TitleBar 三点菜单切换。
  */
-class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
+class RssFragment() :
+    VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
     MainFragmentInterface,
     VariableDialog.Callback {
 
@@ -178,12 +177,12 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
             sortViewModel = rssSortViewModel,
             // 用 VM 作用域：视图在 offscreen 分步放开期间可能销毁重建，
             // viewLifecycleOwner 的 scope 会随视图死亡导致控制器协程静默失效
-            scope = rssSortViewModel.viewModelScope
+            scope = rssSortViewModel.viewModelScope,
         )
     }
 
     private val editSourceResult = registerForActivityResult(
-        StartActivityContract(RssSourceEditActivity::class.java)
+        StartActivityContract(RssSourceEditActivity::class.java),
     ) {
         if (it.resultCode == androidx.appcompat.app.AppCompatActivity.RESULT_OK) {
             // 编辑源后重载当前源（分类缓存可能已变）
@@ -213,7 +212,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
 
     private fun initComposeContent() {
         binding.composeSourceGrid.setViewCompositionStrategy(
-            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
         )
         binding.composeSourceGrid.setContent {
             LegadoTheme {
@@ -228,7 +227,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
                         onShowBlockRule = { showModernBlockRuleConfig() },
                         moreMenuItems = ::buildModernRssMenuItems,
                         onMenuItem = ::handleModernRssMenu,
-                        bottomPaddingPx = bottomPaddingPx
+                        bottomPaddingPx = bottomPaddingPx,
                     )
                 } else {
                     RssSourceGrid(
@@ -306,9 +305,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.rss)
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
+            override fun onQueryTextSubmit(query: String?): Boolean = false
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 upRssFlowJob(newText)
@@ -329,7 +326,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
             }.flowWithLifecycleAndDatabaseChange(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
-                AppDatabase.RSS_SOURCE_TABLE_NAME
+                AppDatabase.RSS_SOURCE_TABLE_NAME,
             ).conflate().collect {
                 groups.clear()
                 groups.addAll(it)
@@ -353,29 +350,43 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
                 // 应用排序逻辑，与订阅源管理页面保持一致
                 when (sort) {
                     RssSourceSort.Name -> {
-                        if (sortAscending) data.sortedWith { o1, o2 ->
-                            o1.sourceName.cnCompare(o2.sourceName)
-                        } else data.sortedWith { o1, o2 ->
-                            o2.sourceName.cnCompare(o1.sourceName)
+                        if (sortAscending) {
+                            data.sortedWith { o1, o2 ->
+                                o1.sourceName.cnCompare(o2.sourceName)
+                            }
+                        } else {
+                            data.sortedWith { o1, o2 ->
+                                o2.sourceName.cnCompare(o1.sourceName)
+                            }
                         }
                     }
                     RssSourceSort.Url -> {
-                        if (sortAscending) data.sortedBy { it.sourceUrl }
-                        else data.sortedByDescending { it.sourceUrl }
+                        if (sortAscending) {
+                            data.sortedBy { it.sourceUrl }
+                        } else {
+                            data.sortedByDescending { it.sourceUrl }
+                        }
                     }
                     RssSourceSort.Update -> {
-                        if (sortAscending) data.sortedBy { it.lastUpdateTime }
-                        else data.sortedByDescending { it.lastUpdateTime }
+                        if (sortAscending) {
+                            data.sortedBy { it.lastUpdateTime }
+                        } else {
+                            data.sortedByDescending { it.lastUpdateTime }
+                        }
                     }
                     RssSourceSort.Enable -> {
-                        if (sortAscending) data.sortedWith { o1, o2 ->
-                            var sortNum = -o1.enabled.compareTo(o2.enabled)
-                            if (sortNum == 0) sortNum = o1.sourceName.cnCompare(o2.sourceName)
-                            sortNum
-                        } else data.sortedWith { o1, o2 ->
-                            var sortNum = o1.enabled.compareTo(o2.enabled)
-                            if (sortNum == 0) sortNum = o1.sourceName.cnCompare(o2.sourceName)
-                            sortNum
+                        if (sortAscending) {
+                            data.sortedWith { o1, o2 ->
+                                var sortNum = -o1.enabled.compareTo(o2.enabled)
+                                if (sortNum == 0) sortNum = o1.sourceName.cnCompare(o2.sourceName)
+                                sortNum
+                            }
+                        } else {
+                            data.sortedWith { o1, o2 ->
+                                var sortNum = o1.enabled.compareTo(o2.enabled)
+                                if (sortNum == 0) sortNum = o1.sourceName.cnCompare(o2.sourceName)
+                                sortNum
+                            }
                         }
                     }
                     else -> data // 手动排序时，数据库已按 customOrder 排序
@@ -383,7 +394,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
             }.flowWithLifecycleAndDatabaseChange(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
-                AppDatabase.RSS_SOURCE_TABLE_NAME
+                AppDatabase.RSS_SOURCE_TABLE_NAME,
             ).catch {
                 AppLog.put("订阅界面更新数据出错", it)
             }.conflate().flowOn(IO).collect {
@@ -420,7 +431,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
                         true,
                         rssSource.sourceUrl,
                         rssSource.sourceName,
-                        url
+                        url,
                     )
                 } else {
                     context?.openUrl(url)
@@ -437,7 +448,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
                     true,
                     rssSource.sourceUrl,
                     rssSource.sourceName,
-                    startHtml = html
+                    startHtml = html,
                 )
             }
         }
@@ -481,8 +492,10 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
         } else {
             val source = modernController.source
             val pageItem = menu.add(
-                Menu.NONE, MENU_ID_PAGE, 0,
-                getString(R.string.menu_page, modernController.currentPage)
+                Menu.NONE,
+                MENU_ID_PAGE,
+                0,
+                getString(R.string.menu_page, modernController.currentPage),
             )
             pageItem.isVisible = !source?.ruleNextPage.isNullOrEmpty()
             val loginItem = menu.add(Menu.NONE, MENU_ID_LOGIN, 1, R.string.login)
@@ -510,12 +523,12 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
             RssMoreMenuItem(
                 MENU_ID_PAGE,
                 getString(R.string.menu_page, modernController.currentPage),
-                visible = !source?.ruleNextPage.isNullOrEmpty()
+                visible = !source?.ruleNextPage.isNullOrEmpty(),
             ),
             RssMoreMenuItem(
                 MENU_ID_LOGIN,
                 getString(R.string.login),
-                visible = !source?.loginUrl.isNullOrBlank()
+                visible = !source?.loginUrl.isNullOrBlank(),
             ),
             RssMoreMenuItem(MENU_ID_REFRESH_SORT, getString(R.string.refresh_sort)),
             RssMoreMenuItem(MENU_ID_SET_VARIABLE, getString(R.string.set_source_variable)),
@@ -524,7 +537,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
             RssMoreMenuItem(MENU_ID_BLOCK_RULE, getString(R.string.explore_block_rule)),
             RssMoreMenuItem(MENU_ID_READ_RECORD, getString(R.string.read_record)),
             RssMoreMenuItem(MENU_ID_CLEAR, getString(R.string.clear)),
-            RssMoreMenuItem(MENU_ID_SWITCH_LEGACY, getString(R.string.switch_to_old_rss))
+            RssMoreMenuItem(MENU_ID_SWITCH_LEGACY, getString(R.string.switch_to_old_rss)),
         )
     }
 
@@ -554,7 +567,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
             MENU_ID_SWITCH_LAYOUT -> modernController.toggleLayout()
             MENU_ID_BLOCK_RULE -> showModernBlockRuleConfig()
             MENU_ID_READ_RECORD -> showDialogFragment(
-                ReadRecordDialog(modernController.source?.sourceUrl)
+                ReadRecordDialog(modernController.source?.sourceUrl),
             )
 
             MENU_ID_CLEAR -> modernController.clearArticles()
@@ -591,7 +604,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
                 sourceName = source.sourceName,
                 sourceIcon = source.sourceIcon,
                 hasLoginUrl = !source.loginUrl.isNullOrBlank(),
-            )
+            ),
         )
     }
 
@@ -634,8 +647,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
                     getString(R.string.set_source_variable),
                     source.getKey(),
                     variable,
-                    comment
-                )
+                    comment,
+                ),
             )
         }
     }

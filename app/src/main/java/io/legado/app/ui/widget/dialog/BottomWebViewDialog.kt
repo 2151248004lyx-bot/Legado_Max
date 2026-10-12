@@ -93,7 +93,9 @@ import java.net.URLDecoder
 import java.util.Date
 import androidx.core.graphics.createBitmap
 
-class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view), WebJsExtensions.Callback {
+class BottomWebViewDialog() :
+    BottomSheetDialogFragment(R.layout.dialog_web_view),
+    WebJsExtensions.Callback {
 
     constructor(
         sourceKey: String,
@@ -102,7 +104,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         html: String? = null,
         preloadJs: String? = null,
         config: String? = null,
-        title: String? = null
+        title: String? = null,
     ) : this() {
         arguments = Bundle().apply {
             putString("sourceKey", sourceKey)
@@ -200,7 +202,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
         config.expandedCornersRadius?.let {
             val radius = TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, it, displayMetrics
+                TypedValue.COMPLEX_UNIT_DIP,
+                it,
+                displayMetrics,
             )
             bottomSheet?.let { sheet ->
                 if (radius > 0) {
@@ -209,10 +213,14 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                         android.graphics.drawable.GradientDrawable().apply {
                             cornerRadius = 0f
                             cornerRadii = floatArrayOf(
-                                radius, radius,
-                                radius, radius,
-                                0f, 0f,
-                                0f, 0f
+                                radius,
+                                radius,
+                                radius,
+                                radius,
+                                0f,
+                                0f,
+                                0f,
+                                0f,
                             )
                         }
                     sheet.background = shapeDrawable
@@ -222,7 +230,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             object : android.view.ViewOutlineProvider() {
                                 override fun getOutline(
                                     view: View,
-                                    outline: android.graphics.Outline
+                                    outline: android.graphics.Outline,
                                 ) {
                                     outline.setRoundRect(0, 0, view.width, view.height, radius)
                                 }
@@ -232,14 +240,14 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             object : android.view.ViewOutlineProvider() {
                                 override fun getOutline(
                                     view: View,
-                                    outline: android.graphics.Outline
+                                    outline: android.graphics.Outline,
                                 ) {
                                     outline.setRoundRect(0, 0, view.width, view.height, radius)
                                 }
                             }
                         binding.customWebView.clipToOutline = true
                     }
-                } else { //取消圆角
+                } else { // 取消圆角
                     sheet.backgroundTintList = null
                     sheet.background = null
                     sheet.clipToOutline = false
@@ -377,13 +385,14 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         currentWebView.setOnLongClickListener {
             val hitTestResult = currentWebView.hitTestResult
             if (hitTestResult.type == WebView.HitTestResult.IMAGE_TYPE ||
-                hitTestResult.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) {
+                hitTestResult.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+            ) {
                 hitTestResult.extra?.let { webPic ->
                     requireContext().selector(
                         arrayListOf(
                             SelectItem(getString(R.string.action_save), "save"),
-                            SelectItem(getString(R.string.select_folder), "selectFolder")
-                        )
+                            SelectItem(getString(R.string.select_folder), "selectFolder"),
+                        ),
                     ) { _, charSequence, _ ->
                         when (charSequence.value) {
                             "save" -> saveImage(webPic)
@@ -486,7 +495,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 }
                 val bookType = args.getInt("bookType", 0)
                 currentWebView.post {
-                    currentWebView.onResume() //缓存库拿的需要激活
+                    currentWebView.onResume() // 缓存库拿的需要激活
                     initWebView(analyzeUrl.url, spliceHtml, analyzeUrl.headerMap, bookType)
                     currentWebView.clearHistory()
                 }
@@ -499,7 +508,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                         it.stackTraceToString(),
                         "text/html",
                         "utf-8",
-                        url
+                        url,
                     )
                     currentWebView.clearHistory()
                 }
@@ -507,7 +516,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
         dialog?.setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-                if (binding.customWebView.size > 0) { //网页全屏
+                if (binding.customWebView.size > 0) { // 网页全屏
                     customWebViewCallback?.onCustomViewHidden()
                     return@setOnKeyListener true
                 }
@@ -556,7 +565,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         url: String,
         html: String?,
         headerMap: HashMap<String, String>,
-        bookType: Int
+        bookType: Int,
     ) {
         currentWebView.webChromeClient = CustomWebChromeClient()
         currentWebView.addJavascriptInterface(JSInterface(this), nameBasic)
@@ -613,17 +622,15 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
     }
 
-    private suspend fun webData2bitmap(data: String): ByteArray? {
-        return if (URLUtil.isValidUrl(data)) {
-            okHttpClient.newCallResponseBody {
-                url(data)
-                headerMap.forEach { (key, value) ->
-                    addHeader(key, value)
-                }
-            }.bytes()
-        } else {
-            Base64.decode(data.split(",").toTypedArray()[1], Base64.DEFAULT)
-        }
+    private suspend fun webData2bitmap(data: String): ByteArray? = if (URLUtil.isValidUrl(data)) {
+        okHttpClient.newCallResponseBody {
+            url(data)
+            headerMap.forEach { (key, value) ->
+                addHeader(key, value)
+            }
+        }.bytes()
+    } else {
+        Base64.decode(data.split(",").toTypedArray()[1], Base64.DEFAULT)
     }
 
     override fun onDestroyView() {
@@ -660,9 +667,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                     ctx.requestedOrientation = when (orientation) {
                         "portrait", "portrait-primary" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                         "portrait-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
-                        "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE //横屏且受重力控制正反
-                        "landscape-primary" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE //正向横屏
-                        "landscape-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE //反向横屏
+                        "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE // 横屏且受重力控制正反
+                        "landscape-primary" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE // 正向横屏
+                        "landscape-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE // 反向横屏
                         "any", "unspecified" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
                         else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     }
@@ -694,7 +701,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
         // 交互行为相关配置
         var isDraggable: Boolean? = null, // 设置弹窗是否可以通过拖拽交互
-        var isDraggableOnNestedScroll: Boolean? = null, //是否允许webview滚动控制折叠展开  默认值为true允许
+        var isDraggableOnNestedScroll: Boolean? = null, // 是否允许webview滚动控制折叠展开  默认值为true允许
         var significantVelocityThreshold: Int? = null, // 设置判定为快速滑动的速度阈值（像素/秒）
         var hideFriction: Float? = null, // 设置隐藏时的摩擦系数，影响拖拽回弹效果（0.0-1.0）
 
@@ -726,20 +733,18 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         var widthPercentage: Float? = null, // 弹窗宽度占屏幕宽度的百分比（0.0-1.0）
         var heightPercentage: Float? = null, // 弹窗高度占屏幕高度的百分比（0.0-1.0）
         var responsiveBreakpoint: Int? = null, // 响应式断点（像素），小于此宽度时使用移动端布局
-        var dialogHeight: Int? = null, //弹窗高度（像素），默认为-1（父容器最大高度）、-2（最大内容高度）
+        var dialogHeight: Int? = null, // 弹窗高度（像素），默认为-1（父容器最大高度）、-2（最大内容高度）
 
-        //阅读功能自定义配置
-        var longClickSaveImg : Boolean? = null, //是否启用长按图片保存功能，默认启用
-        var scrollNoDraggable : Boolean? = null, //网页有滚动时禁止对话框拖拽，默认启用
+        // 阅读功能自定义配置
+        var longClickSaveImg: Boolean? = null, // 是否启用长按图片保存功能，默认启用
+        var scrollNoDraggable: Boolean? = null, // 网页有滚动时禁止对话框拖拽，默认启用
     )
 
     inner class CustomWebChromeClient : WebChromeClient() {
-        override fun getDefaultVideoPoster(): Bitmap {
-            return super.getDefaultVideoPoster() ?: createBitmap(100, 100)
-        }
+        override fun getDefaultVideoPoster(): Bitmap = super.getDefaultVideoPoster() ?: createBitmap(100, 100)
 
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
-            originOrientation = activity?.requestedOrientation //先记录原始方向，避免被js控制的影响
+            originOrientation = activity?.requestedOrientation // 先记录原始方向，避免被js控制的影响
             isFullScreen = true
             binding.webViewContainer.invisible()
             binding.customWebView.addView(view)
@@ -772,8 +777,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             val messageLevel = consoleMessage.messageLevel().name
             val message = consoleMessage.message()
             AppLog.put(
-                "${source.getTag()}${messageLevel}: $message",
-                NoStackTraceException("\n${message}\n- Line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+                "${source.getTag()}$messageLevel: $message",
+                NoStackTraceException("\n${message}\n- Line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}"),
             )
             return true
         }
@@ -781,7 +786,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
     inner class CustomWebViewClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(
-            view: WebView?, request: WebResourceRequest?
+            view: WebView?,
+            request: WebResourceRequest?,
         ): Boolean {
             request?.let {
                 return shouldOverrideUrlLoading(it.url)
@@ -800,41 +806,42 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             if (needClearHistory) {
                 needClearHistory = false
-                currentWebView.clearHistory() //清除历史
+                currentWebView.clearHistory() // 清除历史
             }
             super.onPageStarted(view, url, favicon)
             currentWebView.evaluateJavascript(basicJs, null)
         }
 
-        private fun shouldOverrideUrlLoading(url: Uri): Boolean {
-            return when (url.scheme) {
-                "http", "https" -> false
-                "legado", "yuedu" -> {
-                    startActivity<OnLineImportActivity> {
-                        data = url
-                    }
-                    true
+        private fun shouldOverrideUrlLoading(url: Uri): Boolean = when (url.scheme) {
+            "http", "https" -> false
+            "legado", "yuedu" -> {
+                startActivity<OnLineImportActivity> {
+                    data = url
                 }
+                true
+            }
 
-                else -> {
-                    binding.root.longSnackbar(R.string.jump_to_another_app, R.string.confirm) {
-                        activity?.openUrl(url)
-                    }
-                    true
+            else -> {
+                binding.root.longSnackbar(R.string.jump_to_another_app, R.string.confirm) {
+                    activity?.openUrl(url)
                 }
+                true
             }
         }
 
         @SuppressLint("WebViewClientOnReceivedSslError")
         override fun onReceivedSslError(
-            view: WebView?, handler: SslErrorHandler?, error: SslError?
+            view: WebView?,
+            handler: SslErrorHandler?,
+            error: SslError?,
         ) {
             handler?.proceed()
         }
 
         private var jsInjected = false
         override fun shouldInterceptRequest(
-            view: WebView, request: WebResourceRequest
+            view: WebView,
+            request: WebResourceRequest,
         ): WebResourceResponse? {
             val url = request.url.toString()
             if (request.isForMainFrame) {
@@ -853,7 +860,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 return WebResourceResponse(
                     "text/javascript",
                     "utf-8",
-                    ByteArrayInputStream("(() => {$JS_INJECTION\n$preloadJs\n})();".toByteArray())
+                    ByteArrayInputStream("(() => {$JS_INJECTION\n$preloadJs\n})();".toByteArray()),
                 )
             }
             return super.shouldInterceptRequest(view, request)
@@ -897,12 +904,11 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 return WebResourceResponse(
                     mimeType,
                     charsetSre,
-                    ByteArrayInputStream(bodyText.toByteArray(charset))
+                    ByteArrayInputStream(bodyText.toByteArray(charset)),
                 )
             } catch (_: Exception) {
                 return null
             }
         }
     }
-
 }

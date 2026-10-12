@@ -301,12 +301,14 @@ object ThemeConfig {
         val rawPath = context.getPrefString(prefKey).orEmpty()
         if (rawPath.isBlank()) return null
         return when {
-            rawPath.startsWith("http") -> FileUtils
-                .getPath(context.externalFiles, prefKey, getUrlToFile(rawPath))
-                .takeIf { FileUtils.exist(it) }
-            !rawPath.contains(File.separator) -> FileUtils
-                .getPath(context.externalFiles, prefKey, rawPath)
-                .takeIf { FileUtils.exist(it) }
+            rawPath.startsWith("http") ->
+                FileUtils
+                    .getPath(context.externalFiles, prefKey, getUrlToFile(rawPath))
+                    .takeIf { FileUtils.exist(it) }
+            !rawPath.contains(File.separator) ->
+                FileUtils
+                    .getPath(context.externalFiles, prefKey, rawPath)
+                    .takeIf { FileUtils.exist(it) }
             else -> rawPath.takeIf { File(it).isFile }
         }
     }
@@ -400,8 +402,7 @@ object ThemeConfig {
      *
      * 用于"压在图片上的文字该用深色还是浅色"（顶栏透明时压在主界面壁纸上）。
      */
-    fun getImageLuminance(path: String): Float? =
-        sampleImage(path, cropAspectRatio = null).luminance.takeIf { it >= 0f }
+    fun getImageLuminance(path: String): Float? = sampleImage(path, cropAspectRatio = null).luminance.takeIf { it >= 0f }
 
     /**
      * 图片文件的平均色（不含 alpha），解不出来时返回 null。
@@ -414,10 +415,9 @@ object ThemeConfig {
      *   把"实际很亮"的图判成暗图（2026-10-12 的顶栏白字压浅底就是这个原因）。
      *   传 null 表示按整图统计。
      */
-    fun getImageAverageColor(path: String, cropAspectRatio: Float? = null): Int? =
-        sampleImage(path, cropAspectRatio)
-            .takeIf { it.luminance >= 0f }
-            ?.averageColor
+    fun getImageAverageColor(path: String, cropAspectRatio: Float? = null): Int? = sampleImage(path, cropAspectRatio)
+        .takeIf { it.luminance >= 0f }
+        ?.averageColor
 
     /**
      * 窗口背景图（主界面壁纸）的平均亮度（0..1）；未配置背景图或解不出来时返回 null。

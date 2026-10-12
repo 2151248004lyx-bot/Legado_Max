@@ -38,7 +38,6 @@ import io.legado.app.ui.book.explore.compose.ExploreShowActions
 import io.legado.app.ui.book.explore.compose.ExploreShowController
 import io.legado.app.ui.book.explore.compose.ExploreShowInitArgs
 import io.legado.app.ui.book.explore.compose.EXPLORE_LAYOUT_GRID
-import io.legado.app.ui.book.explore.compose.EXPLORE_LAYOUT_LIST
 import io.legado.app.ui.book.explore.compose.EXPLORE_LAYOUT_WATERFALL
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.group.GroupSelectDialog
@@ -92,7 +91,8 @@ import kotlinx.coroutines.launch
  * 本类是宿主：持有搜索词、排序、展开状态与底栏内边距，执行平台操作（开 Activity、弹对话框），
  * 把排序 / 过滤后的书源列表交给 Compose 渲染。
  */
-class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explore),
+class ExploreFragment() :
+    VMBaseFragment<ExploreViewModel>(R.layout.fragment_explore),
     MainFragmentInterface,
     ExploreKindQueryDialog.OnKindSelected,
     GroupSelectDialog.CallBack {
@@ -122,12 +122,16 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     // 书源分组集合
     private val groups = linkedSetOf<String>()
+
     // 发现数据流任务
     private var exploreFlowJob: Job? = null
+
     // 分组菜单
     private var groupsMenu: SubMenu? = null
+
     // 排序方式
     private var sort = BookSourceSort.Default
+
     // 是否升序排序
     private var sortAscending = true
 
@@ -168,9 +172,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_$modernExploreSourceUrl", 2),
                 showCategoryTab = true,
                 preloadMode = 0,
-                showBlockProgress = modernShowBlockProgress
+                showBlockProgress = modernShowBlockProgress,
             ),
-            scope = exploreShowViewModel.viewModelScope
+            scope = exploreShowViewModel.viewModelScope,
         )
     }
 
@@ -218,7 +222,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             persistShowBlockProgress = {
                 putPrefBoolean(PreferKey.blockRuleShowProgress, it)
                 modernShowBlockProgress = it
-            }
+            },
         )
     }
 
@@ -288,7 +292,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     private fun initComposeContent() {
         binding.composeSourceList.setViewCompositionStrategy(
-            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
         )
         binding.composeSourceList.setContent {
             LegadoTheme {
@@ -306,7 +310,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                         onRefreshSource = ::refreshModernExploreSource,
                         onLogin = ::loginModernExploreSource,
                         onEditSource = { currentModernSourceUrl()?.let(::editSource) },
-                        onSearchSource = { currentModernSource()?.let(::searchBook) }
+                        onSearchSource = { currentModernSource()?.let(::searchBook) },
                     )
                 } else {
                     ExploreSourceList(
@@ -380,9 +384,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.screen_find)
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
+            override fun onQueryTextSubmit(query: String?): Boolean = false
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 upExploreData(newText)
@@ -401,7 +403,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 .flowWithLifecycleAndDatabaseChange(
                     viewLifecycleOwner.lifecycle,
                     Lifecycle.State.RESUMED,
-                    AppDatabase.BOOK_SOURCE_TABLE_NAME
+                    AppDatabase.BOOK_SOURCE_TABLE_NAME,
                 )
                 .conflate()
                 .distinctUntilChanged()
@@ -479,7 +481,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             }.flowWithLifecycleAndDatabaseChange(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
-                AppDatabase.BOOK_SOURCE_TABLE_NAME
+                AppDatabase.BOOK_SOURCE_TABLE_NAME,
             ).catch {
                 AppLog.put("发现界面更新数据出错", it)
             }.conflate().flowOn(IO).collect { data ->
@@ -487,7 +489,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 displayItems = data.toExploreSourceItems()
                 // 搜索中不显示空态：搜索框里的字还没清掉，列表空着是正常的
                 binding.tvEmptyMsg.isGone =
-                    data.isNotEmpty() || searchView.query.isNotEmpty() || modernExplore
+                    data.isNotEmpty() ||
+                    searchView.query.isNotEmpty() ||
+                    modernExplore
                 if (modernExplore && !modernExploreInited) {
                     initModernExploreData()
                 }
@@ -503,7 +507,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             modernController.applyPerSourceLayout(
                 layoutMode = getPrefInt("${PreferKey.exploreGridMode}_$modernExploreSourceUrl", 0),
                 columnGrid = getPrefInt("${PreferKey.exploreShowColumn}_$modernExploreSourceUrl", 2),
-                columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_$modernExploreSourceUrl", 2)
+                columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_$modernExploreSourceUrl", 2),
             )
         }
     }
@@ -535,7 +539,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         when (item.itemId) {
             R.id.menu_more -> showExploreMoreMenu(binding.titleBar)
             R.id.menu_select_column -> modernExploreActions.onColumnPick(
-                modernController.effectiveColumnCount()
+                modernController.effectiveColumnCount(),
             ) { modernController.selectColumnCount(it) }
 
             R.id.menu_sort_desc -> {
@@ -669,7 +673,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         modernController.applyPerSourceLayout(
             layoutMode = getPrefInt("${PreferKey.exploreGridMode}_${source.bookSourceUrl}", 0),
             columnGrid = getPrefInt("${PreferKey.exploreShowColumn}_${source.bookSourceUrl}", 2),
-            columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_${source.bookSourceUrl}", 2)
+            columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_${source.bookSourceUrl}", 2),
         )
         exploreShowViewModel.initData(source.bookSourceUrl, null)
     }
@@ -704,8 +708,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     /** 新版发现当前选中源的书源地址；未选中或为空时返回 null */
-    private fun currentModernSourceUrl(): String? =
-        modernExploreSourceUrl?.takeIf { it.isNotBlank() }
+    private fun currentModernSourceUrl(): String? = modernExploreSourceUrl?.takeIf { it.isNotBlank() }
 
     /**
      * 新版发现当前选中源的完整书源。
@@ -713,8 +716,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
      * 列表条目模型只带 url，而编辑书源 / 搜索书籍需要完整的 [BookSourcePart]，
      * 因此从当前源列表里按 url 反查（与旧版长按菜单 `onSourceMenuAction` 的做法一致）。
      */
-    private fun currentModernSource(): BookSourcePart? =
-        sourceItems.firstOrNull { it.bookSourceUrl == modernExploreSourceUrl }
+    private fun currentModernSource(): BookSourcePart? = sourceItems.firstOrNull { it.bookSourceUrl == modernExploreSourceUrl }
 
     /** 三点菜单：旧版只有切换入口；新版带发现列表页的全部菜单项 */
     private fun showExploreMoreMenu(anchor: View) {
@@ -747,7 +749,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     }
 
                     MENU_ID_SELECT_COLUMN -> modernExploreActions.onColumnPick(
-                        modernController.effectiveColumnCount()
+                        modernController.effectiveColumnCount(),
                     ) { modernController.selectColumnCount(it) }
 
                     MENU_ID_BLOCK_RULE -> modernExploreActions.onShowBlockRuleClick()
@@ -777,7 +779,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             modernController.applyPerSourceLayout(
                 layoutMode = getPrefInt("${PreferKey.exploreGridMode}_$modernExploreSourceUrl", 0),
                 columnGrid = getPrefInt("${PreferKey.exploreShowColumn}_$modernExploreSourceUrl", 2),
-                columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_$modernExploreSourceUrl", 2)
+                columnWaterfall = getPrefInt("${PreferKey.exploreShowColumnWaterfall}_$modernExploreSourceUrl", 2),
             )
             if (!modernExploreInited) {
                 // 数据流处于 RESUMED 不会重发，就地初始化
@@ -807,5 +809,4 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             exploreShowViewModel.addAllToShelf(groupId)
         }
     }
-
 }

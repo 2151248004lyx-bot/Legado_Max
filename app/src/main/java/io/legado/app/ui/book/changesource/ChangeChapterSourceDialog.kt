@@ -52,8 +52,8 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-
-class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_change_source),
+class ChangeChapterSourceDialog() :
+    BaseDialogFragment(R.layout.dialog_chapter_change_source),
     Toolbar.OnMenuItemClickListener,
     ChangeChapterSourceAdapter.CallBack,
     ChangeChapterTocAdapter.Callback {
@@ -191,15 +191,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
             binding.toolBar.subtitle = ""
         }
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
+            override fun onQueryTextSubmit(query: String?): Boolean = false
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 viewModel.screen(newText)
                 return false
             }
-
         })
     }
 
@@ -357,9 +354,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         viewModel.setBookScore(searchBook, score)
     }
 
-    override fun getBookScore(searchBook: SearchBook): Int {
-        return viewModel.getBookScore(searchBook)
-    }
+    override fun getBookScore(searchBook: SearchBook): Int = viewModel.getBookScore(searchBook)
 
     override fun clickChapter(bookChapter: BookChapter, nextChapterUrl: String?) {
         searchBook?.let {
@@ -403,7 +398,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
             searchBookAdapter.notifyItemRangeChanged(
                 0,
                 searchBookAdapter.itemCount,
-                bundleOf(Pair("upCurSource", oldBookUrl))
+                bundleOf(Pair("upCurSource", oldBookUrl)),
             )
         }
     }
@@ -413,5 +408,4 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>)
         fun replaceContent(content: String)
     }
-
 }

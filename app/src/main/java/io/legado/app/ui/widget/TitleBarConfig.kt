@@ -232,10 +232,8 @@ private fun windowBackgroundColor(context: Context): Int {
  * 只按主题背景色判断深浅，会在"浅色背景色 + 深色壁纸"（或反之）这类组合里取反——
  * 主界面与"我的"子界面的顶栏都压在壁纸上，这正是顶栏文字/图标撞色的主要来源。
  */
-private fun windowBackgroundLuminance(context: Context): Float {
-    return ThemeConfig.getBgImageLuminance(context)
-        ?: ColorUtils.calculateLuminance(context.backgroundColor).toFloat()
-}
+private fun windowBackgroundLuminance(context: Context): Float = ThemeConfig.getBgImageLuminance(context)
+    ?: ColorUtils.calculateLuminance(context.backgroundColor).toFloat()
 
 /**
  * 顶栏内容颜色：按顶栏自身底色取色（见 [resolveTopBarContentColor]），
@@ -249,13 +247,11 @@ private fun windowBackgroundLuminance(context: Context): Float {
  * 书架的顶栏分组选择器等自定义子视图也要按同一规则取色，它们都必须复用这个函数，
  * 否则会与标题各按一套规则取色。
  */
-internal fun TitleBar.topBarContentColor(): Int {
-    return resolveTopBarContentColor(
-        context = context,
-        topBarTheme = topBarTheme,
-        topBarBackground = background.resolveSolidColor(),
-    )
-}
+internal fun TitleBar.topBarContentColor(): Int = resolveTopBarContentColor(
+    context = context,
+    topBarTheme = topBarTheme,
+    topBarBackground = background.resolveSolidColor(),
+)
 
 /**
  * 只重算顶栏前景色，不改背景。

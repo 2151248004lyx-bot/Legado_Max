@@ -19,7 +19,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.databinding.ActivityReplaceRuleBinding
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.dialogs.alert
@@ -64,7 +63,8 @@ import kotlinx.coroutines.launch
 /**
  * 替换规则管理
  */
-class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRuleViewModel>(),
+class ReplaceRuleActivity :
+    VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRuleViewModel>(),
     SearchView.OnQueryTextListener,
     PopupMenu.OnMenuItemClickListener,
     SelectActionBar.CallBack,
@@ -96,9 +96,9 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
         }
     }
     private val exportResult = registerForActivityResult(HandleFileContract()) {
-ExportResultHandler.handleExportResult(this, it, { text ->
-sendToClip(text)
-}, StringUtils.REPLACE_RULE)
+        ExportResultHandler.handleExportResult(this, it, { text ->
+            sendToClip(text)
+        }, StringUtils.REPLACE_RULE)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -280,7 +280,7 @@ sendToClip(text)
                 fileData = HandleFileContract.FileData(
                     "exportReplaceRule.json",
                     GSON.toJson(adapter.selection).toByteArray(),
-                    "application/json"
+                    "application/json",
                 )
             }
         }
@@ -360,7 +360,7 @@ sendToClip(text)
                     startActivity<WebViewActivity> {
                         putExtra("url", url)
                     }
-                }
+                },
             )
             customView { alertBinding.root }
             okButton {
@@ -371,7 +371,7 @@ sendToClip(text)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
                     showDialogFragment(
-                        ImportReplaceRuleDialog(it)
+                        ImportReplaceRuleDialog(it),
                     )
                 }
             }
@@ -384,9 +384,7 @@ sendToClip(text)
         return false
     }
 
-    override fun onQueryTextSubmit(query: String?): Boolean {
-        return false
-    }
+    override fun onQueryTextSubmit(query: String?): Boolean = false
 
     override fun onDestroy() {
         super.onDestroy()
@@ -396,7 +394,7 @@ sendToClip(text)
     override fun upCountView() {
         binding.selectActionBar.upCountView(
             adapter.selection.size,
-            adapter.itemCount
+            adapter.itemCount,
         )
     }
 
