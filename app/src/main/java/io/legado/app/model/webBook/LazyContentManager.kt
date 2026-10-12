@@ -176,7 +176,7 @@ class LazyContentManager(
                                 placeholder
                             }
                         }
-                        content = HtmlFormatter.formatKeepImg(content, rUrl)
+                        content = HtmlFormatter.formatKeepImg(content, rUrl, AppConfig.keepBlankLine)
                         if (content.indexOf('&') > -1) {
                             content = StringEscapeUtils.unescapeHtml4(content)
                         }

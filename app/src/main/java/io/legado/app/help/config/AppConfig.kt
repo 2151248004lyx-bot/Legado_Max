@@ -164,6 +164,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var editAutoComplete = appCtx.getPrefBoolean(PreferKey.editAutoComplete, true)
     var showBoardLine = appCtx.getPrefInt(PreferKey.showBoardLine, 1)
     var adaptSpecialStyle = appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
+    // 阅读时保留正文里的空行（默认开启：不再压缩/丢弃原文的空行）
+    // 只在阅读菜单里切换，这里自己落盘，保证重启后状态不丢
+    var keepBlankLine = appCtx.getPrefBoolean(PreferKey.keepBlankLine, true)
+        set(value) {
+            field = value
+            appCtx.putPrefBoolean(PreferKey.keepBlankLine, value)
+        }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
@@ -173,6 +180,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.editAutoComplete -> editAutoComplete = appCtx.getPrefBoolean(PreferKey.editAutoComplete, true)
             PreferKey.showBoardLine -> showBoardLine = appCtx.getPrefInt(PreferKey.showBoardLine, 1)
             PreferKey.adaptSpecialStyle -> adaptSpecialStyle = appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
+            PreferKey.keepBlankLine -> keepBlankLine = appCtx.getPrefBoolean(PreferKey.keepBlankLine, true)
 
             PreferKey.themeMode -> themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
 

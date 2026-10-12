@@ -163,6 +163,8 @@ class TextChapterLayout(
     private val isRightTitle = ReadBookConfig.isRightTitle
     private val textFullJustify = ReadBookConfig.textFullJustify
     private val adaptSpecialStyle = AppConfig.adaptSpecialStyle
+    // 保留空行：ContentProcessor 会为空行放进空段落，这里给它一个等高的空行
+    private val keepBlankLine = AppConfig.keepBlankLine
     private val pageAnim = book.getPageAnim()
     private val compiledHighlightRules by lazy {
         HighlightRuleRepository.loadEnabledRules(appCtx).mapNotNull { rule ->
@@ -337,6 +339,11 @@ class TextChapterLayout(
                     }
                 }
             }
+            if (keepBlankLine && content.isBlank()) {
+                // 空行占位段落：只占一行的高度，不产生字符
+                addBlankLine()
+                continue
+            }
             var text = content.replace(srcReplaceChar, srcReplacementChar)
             if (isTextImageStyle) {
                 val srcList = LinkedList<String>()
@@ -464,6 +471,34 @@ class TextChapterLayout(
             stringBuilder.append("\n")
         }
         return wordCount
+    }
+
+    /**
+     * 排版一个空行：占一行的高度，不产生任何字符列。
+     *
+     * 空行由 [io.legado.app.help.book.ContentProcessor] 在开启"保留空行"时以空段落的形式
+     * 放进 textList，这里给它一个与正文行等高的空行，原文的空行在排版结果里就仍然留白。
+     *
+     * 注意：这里 **不能** 标记 [TextLine.isParagraphEnd]，也不能往 stringBuilder 追加 "\n"。
+     * 一旦空行成为一个"段落"，page.text 里就会多出一个换行，TextChapter.paragraphs 里也
+     * 会多一个条目；而朗读的 contentList 会把空文本条目过滤掉
+     * （BaseReadAloudService: `.split("\n").filter { it.isNotEmpty() }`），
+     * 两个列表从此错位，听书高亮就会跟不上实际朗读的段落。
+     * 不标记段落结尾时，空行会被并入上一段——只贡献一行高度、不占字符，
+     * 排版效果不变，朗读索引也保持稳定。
+     */
+    private suspend fun addBlankLine() {
+        prepareNextPageIfNeed(durY + contentPaintTextHeight)
+        val textLine = TextLine()
+        textLine.text = ""
+        calcTextLinePosition(textPages, textLine, stringBuilder.length)
+        textLine.upTopBottom(durY, contentPaintTextHeight, contentPaintFontMetrics)
+        val textPage = pendingTextPage
+        textPage.addLine(textLine)
+        durY += contentPaintTextHeight * lineSpacingExtra
+        if (textPage.height < durY) {
+            textPage.height = durY
+        }
     }
 
     private class BodyImage(

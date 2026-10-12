@@ -6,6 +6,11 @@ import java.util.regex.Pattern
 
 @Suppress("RegExpRedundantEscape")
 object HtmlFormatter {
+    // 空块元素的占位标记：正文里不会出现，也不属于 \s，便于后续统计空段落个数
+    private const val EMPTY_BLOCK_MARK = '\u0001'
+    // 连续空行最多保留几行，防止个别站点堆一大串空段落撑出半屏空白
+    private const val MAX_KEEP_BLANK_LINES = 5
+
     private val nbspRegex = "(&nbsp;)+".toRegex()
     private val espRegex = "(&ensp;|&emsp;)".toRegex()
     private val noPrintRegex = "(&thinsp;|&zwnj;|&zwj;|\u2009|\u200C|\u200D)".toRegex()
@@ -22,18 +27,59 @@ object HtmlFormatter {
     private val indent1Regex = "\\s*\\n+\\s*".toRegex()
     private val indent2Regex = "^[\\n\\s]+".toRegex()
     private val lastRegex = "[\\n\\s]+$".toRegex()
+    // 空块元素：<p>/<div> 内只有空白、&nbsp;、<br>、<hr>，网页用它表示空行
+    private val emptyBlockRegex =
+        "<(p|div)\\b[^>]*>(?:[\\s　]|&nbsp;|<br\\s*/?>|<hr\\s*/?>)*</\\1\\s*>"
+            .toRegex(RegexOption.IGNORE_CASE)
+    // 段落间隔：空白 + 空块标记 + 换行（标记须包含在内，否则会阻断匹配把间隔切碎）
+    private val gapRegex =
+        "[\\s　$EMPTY_BLOCK_MARK]*\\n[\\s　\\n$EMPTY_BLOCK_MARK]*".toRegex()
 
-    fun format(html: String?, otherRegex: Regex = otherHtmlRegex): String {
+    fun format(
+        html: String?,
+        otherRegex: Regex = otherHtmlRegex,
+        keepBlankLine: Boolean = false
+    ): String {
         html ?: return ""
-        return html.replace(nbspRegex, " ")
+        // 开启保留空行时先把「空块元素」整体替换成一个标记，
+        // 这样后面统计到的是真实空段落个数，而不是每个标签都换成一个 \n 带来的噪声
+        val source = if (keepBlankLine) {
+            html.replace(emptyBlockRegex, "\n$EMPTY_BLOCK_MARK")
+        } else {
+            html
+        }
+        val text = source.replace(nbspRegex, " ")
             .replace(espRegex, " ")
             .replace(noPrintRegex, "")
             .replace(wrapHtmlRegex, "\n")
             .replace(commentRegex, "")
             .replace(otherRegex, "")
-            .replace(indent1Regex, "\n　　")
+        // 保留空行：默认会把连续换行压成一个（原文空行就此丢失）。
+        // 开启后按「空段落个数」还原空行数量，最多 MAX_KEEP_BLANK_LINES 个，
+        // 防止个别站点堆一大串空段落把正文撑出半屏空白；
+        // 没有空段落但出现连续换行时（如 <br><br>）仍保留一个空行。
+        val indented = if (keepBlankLine) {
+            text.replace(gapRegex) { match ->
+                val blankLines = countBlankLines(match.value)
+                if (blankLines > 0) "\n" + "\n".repeat(blankLines) + "　　" else "\n　　"
+            }
+        } else {
+            text.replace(indent1Regex, "\n　　")
+        }
+        return indented
             .replace(indent2Regex, "　　")
             .replace(lastRegex, "")
+            // 兜底：清掉可能残留在开头/结尾的空块标记
+            .replace(EMPTY_BLOCK_MARK.toString(), "")
+    }
+
+    private fun countBlankLines(gap: String): Int {
+        val marks = gap.count { it == EMPTY_BLOCK_MARK }
+        return when {
+            marks > 0 -> minOf(marks, MAX_KEEP_BLANK_LINES)
+            gap.count { it == '\n' } >= 2 -> 1
+            else -> 0
+        }
     }
 
     /**
@@ -49,9 +95,13 @@ object HtmlFormatter {
         )
     }
 
-    fun formatKeepImg(html: String?, redirectUrl: URL? = null): String {
+    fun formatKeepImg(
+        html: String?,
+        redirectUrl: URL? = null,
+        keepBlankLine: Boolean = false
+    ): String {
         html ?: return ""
-        val keepImgHtml = format(html, notImgHtmlRegex)
+        val keepImgHtml = format(html, notImgHtmlRegex, keepBlankLine)
 
         //正则的“|”处于顶端而不处于（）中时，具有类似||的熔断效果，故以此机制简化原来的代码
         val matcher = formatImagePattern.matcher(keepImgHtml)

@@ -524,6 +524,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
         menu.findItem(R.id.menu_same_title_removed)?.isChecked =
             ReadBook.curTextChapter?.sameTitleRemoved == true
+        menu.findItem(R.id.menu_keep_blank_line)?.isChecked =
+            AppConfig.keepBlankLine
         return super.onMenuOpened(featureId, menu)
     }
 
@@ -544,6 +546,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 else -> when (item.itemId) {
                     R.id.menu_enable_replace -> item.isChecked = book.getUseReplaceRule()
                     R.id.menu_re_segment -> item.isChecked = book.getReSegment()
+                    R.id.menu_keep_blank_line -> item.isChecked = AppConfig.keepBlankLine
 //                    R.id.menu_enable_review -> {
 //                        item.isVisible = BuildConfig.DEBUG
 //                        item.isChecked = AppConfig.enableReview
@@ -642,6 +645,12 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.id.menu_re_segment -> ReadBook.book?.let {
                 it.setReSegment(!it.getReSegment())
                 item.isChecked = it.getReSegment()
+                ReadBook.loadContent(false)
+            }
+
+            R.id.menu_keep_blank_line -> {
+                AppConfig.keepBlankLine = !AppConfig.keepBlankLine
+                item.isChecked = AppConfig.keepBlankLine
                 ReadBook.loadContent(false)
             }
 
