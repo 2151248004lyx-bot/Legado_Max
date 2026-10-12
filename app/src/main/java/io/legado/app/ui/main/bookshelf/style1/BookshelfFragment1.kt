@@ -27,6 +27,7 @@ import io.legado.app.databinding.FragmentBookshelf1Binding
 import io.legado.app.help.book.BookTagManagement
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.search.SearchActivity
@@ -211,6 +212,8 @@ class BookshelfFragment1() :
         override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
             val view = super.getView(position, convertView, parent)
             if (view is TextView) {
+                // 分组名是用户自定义的（可能带表情符号），而 ListPopupWindow 也是另开的窗口（§7.10）
+                view.text = getItem(position)?.eInkGrayscale()
                 if (position == selectedPosition) {
                     view.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_check, 0, 0, 0)
                 } else {

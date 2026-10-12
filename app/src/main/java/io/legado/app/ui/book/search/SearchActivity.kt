@@ -37,6 +37,7 @@ import io.legado.app.domain.model.BookShelfState
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.Selector
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
@@ -172,7 +173,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 // 多书源模式下为每个书源添加菜单项，超过5个时折叠显示
                 val maxShow = 5
                 searchScopeNames.take(maxShow).forEach { name ->
-                    menu.add(R.id.menu_group_1, Menu.NONE, Menu.NONE, name).apply {
+                    // 书源名 / 分组名是用户自定义的（可能带表情符号），这个菜单是 AppCompat
+                    // 自己开的窗口，挂不了整层灰阶，只能把标题本身按灰阶绘制（§7.10）
+                    menu.add(R.id.menu_group_1, Menu.NONE, Menu.NONE, name.eInkGrayscale()).apply {
                         isChecked = true
                     }
                 }
@@ -200,11 +203,11 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             // 菜单只显示已启用分组
             groups?.forEach {
                 if (searchScopeNames.contains(it)) {
-                    menu.add(R.id.menu_group_1, Menu.NONE, Menu.NONE, it).apply {
+                    menu.add(R.id.menu_group_1, Menu.NONE, Menu.NONE, it.eInkGrayscale()).apply {
                         isChecked = true
                     }
                 } else {
-                    menu.add(R.id.menu_group_2, Menu.NONE, Menu.NONE, it)
+                    menu.add(R.id.menu_group_2, Menu.NONE, Menu.NONE, it.eInkGrayscale())
                 }
             }
             if (!hasChecked) {

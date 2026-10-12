@@ -37,6 +37,7 @@ import io.legado.app.help.ConcurrentRateLimiter
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
+import io.legado.app.lib.theme.eInkGrayscale
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.CacheBook
 import io.legado.app.service.ExportBookService
@@ -192,7 +193,10 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         menu?.findItem(R.id.menu_book_group)?.subMenu?.let { subMenu ->
             subMenu.removeGroup(R.id.menu_group)
             groupList.forEach { bookGroup ->
-                subMenu.add(R.id.menu_group, bookGroup.order, Menu.NONE, bookGroup.groupName)
+                // 分组名是用户自定义的（可能带表情符号），框架自开的菜单窗口挂不了整层灰阶（§7.10）
+                subMenu.add(
+                    R.id.menu_group, bookGroup.order, Menu.NONE, bookGroup.groupName.eInkGrayscale()
+                )
             }
         }
     }

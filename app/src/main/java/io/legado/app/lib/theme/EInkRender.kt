@@ -148,7 +148,8 @@ fun Modifier.eInkGrayscale(): Modifier {
  * 滤镜落在**这段文本自己的绘制**上：把文本绘制罩进一个离屏图层再合成，
  * 所以作用范围恰好是这段文本，不依赖窗口。关掉墨水屏渲染时直接返回原文本，零开销。
  *
- * 传进来的文本若已经是 `Spannable`，在上面追加 span（不改写已有样式）。
+ * 注意 span 覆盖的是**整段文本**，区间内的其他字符样式（颜色、字号…）会被整段替换绘制吃掉，
+ * 所以只适合纯文本标题（本项目调用点传的都是 `String`）。
  */
 fun CharSequence.eInkGrayscale(): CharSequence {
     val filter = EInkRender.androidFilterOrNull() ?: return this
@@ -168,6 +169,9 @@ fun CharSequence.eInkGrayscale(): CharSequence {
  * 代价是这段文本不再走系统默认的整行绘制，所以只用在菜单标题这类短文本上。
  */
 private class GrayscaleSpan(private val filter: ColorFilter) : ReplacementSpan() {
+
+    /** 合成用的滤镜 Paint，跟整窗那层一样只建一次，不在绘制路径里分配 */
+    private val layerPaint = android.graphics.Paint().apply { colorFilter = filter }
 
     override fun getSize(
         paint: android.graphics.Paint,
@@ -191,10 +195,7 @@ private class GrayscaleSpan(private val filter: ColorFilter) : ReplacementSpan()
         val width = paint.measureText(text, start, end)
         // 表情字形可能略微超出字体的 top/bottom，图层上下各留一点余量，避免被裁掉
         val pad = (bottom - top) * 0.25f
-        val save = canvas.saveLayer(
-            x, top - pad, x + width, bottom + pad,
-            android.graphics.Paint().apply { colorFilter = filter },
-        )
+        val save = canvas.saveLayer(x, top - pad, x + width, bottom + pad, layerPaint)
         // 转成 String 再画：避免 Canvas.drawText(CharSequence…) 又解析一遍 span（会递归回来）
         canvas.drawText(text.subSequence(start, end).toString(), x, y.toFloat(), paint)
         canvas.restoreToCount(save)
