@@ -237,9 +237,11 @@ TopAppBar(
 
 - **必须**：统一在 **UI 根部罩一层灰阶**（`io.legado.app.lib.theme.EInkRender`），不要逐控件贴滤镜：
   - Compose：`LegadoTheme` 内包一层 `Box(Modifier.eInkGrayscale())`。放在 `LegadoTheme` 内部是刻意的——页面、弹窗、底部面板、下拉菜单各自的窗口都进这一层，新写的 Compose 代码自动跟着灰阶。
-  - View：给窗口的**内容根**挂 `EInkRender.applyRootLayer(...)`。Activity 由 `LifecycleHelp.onActivityStarted` 统一挂（Compose 页面走 `BaseComposeActivity`、View 页面走 `BaseActivity`，两者没有公共基类）；`BaseDialogFragment` / `BasePrefDialogFragment` / `AndroidAlertBuilder` 各自给弹窗窗口挂一层（弹窗是独立窗口，Activity 的层盖不到）。
+  - View：给窗口的**内容根**挂 `EInkRender.applyRootLayer(...)`。Activity 由 `LifecycleHelp.onActivityStarted` 统一挂（Compose 页面走 `BaseComposeActivity`、View 页面走 `BaseActivity`，两者没有公共基类）；`BaseDialogFragment` / `BasePrefDialogFragment` / `AndroidAlertBuilder` 各自给弹窗窗口挂一层（弹窗是独立窗口，Activity 的层盖不到）。**凡是自建 View 弹窗类都必须自己挂**——没走上面三个基类的（如 `BottomWebViewDialog`，它继承 `BottomSheetDialogFragment`）漏挂就是一整块彩色。
   - 图层用 `LAYER_TYPE_HARDWARE` / `saveLayer`，内容不变时不重画；同类型 + 同一 Paint 的重复调用不会重建图层，所以可以安全带在每次 start 里调用。
-- **禁止**：在图片 / 文本上再逐个贴滤镜。每张图、每段文字各开一层离屏合成比整窗一层更贵，而且漏一处就是一处彩色残留（文字里的**表情符号**是字体里的彩色字形，`colorFilter` 参数和 `Text.color` 都改不了，只有整窗合成的做法能覆盖）。
+- **禁止**：在图片 / 文本上再逐个贴滤镜。每张图、每段文字各开一层离屏合成比整窗一层更贵，而且漏一处就是一处彩色残留（文字里的**表情符号**是字体里的彩色字形，给文本 paint 挂 `colorFilter`、`Text.color` 都改不了，只有把绘制落到离屏图层再合成的做法能覆盖：整窗一层，或拿不到窗口时用下一条的 `CharSequence.eInkGrayscale()`）。
+- **禁止**：试图替换 `Activity.getSystemService(WINDOW_SERVICE)` 返回的 WindowManager 去兜住框架开的窗口（AppCompat 菜单弹窗等）。`Window.setWindowManager` 会把拿到的 WindowManager **强转成 `WindowManagerImpl`**，代理/包装一返回就是 `ClassCastException`（`Dialog` 构造期必崩）——这条已经踩过，不要重试。
+- **必须**：**拿不到窗口引用的 View 文本**（典型：AppCompat 的子菜单弹窗——「选择分组」下拉就是框架自己创建的窗口，应用连它的引用都没有）用 `CharSequence.eInkGrayscale()`（`EInkRender`）把标题本身按灰阶绘制。菜单项标题里的用户数据（分组名 `🎧有声`、标签名…）会带表情符号，不吃灰阶色板。**只贴标题文本、不要贴整行/整页**：它是 `ReplacementSpan` + `saveLayer`，作用于一段文字的绘制。
 - **必须**：**Compose 自建窗口的弹层**要在自己的 `modifier` 上再贴一次 `Modifier.eInkGrayscale()`——`AlertDialog` / `BasicAlertDialog` / `DropdownMenu` 都会另开窗口，内容在**子组合**里：`MaterialTheme` 这类 CompositionLocal 会被继承，但根层那个 Modifier 挂在布局树上、**不会**被继承，于是这类弹层里全是彩色（书源名的 🍅🎵、条目元信息的 👍▶ 等）。项目自带的弹窗组件（`AppConfirmDialog` / `AppRadioChoiceDialog` / `AppSearchableChoiceDialog` / `AppTagGridDialog` / `AppModalBottomSheet` / `BookBottomSheet` / `ExploreKindSelectSheet`）已内置，新写的弹层优先用它们。
 - **必须**：`ModalBottomSheet` 的灰阶要贴在**内容根**（`content` 里最外层那个 `Column` 的 modifier），**禁止**贴在 `ModalBottomSheet(modifier = ...)` 上——sheet 的宿主自带 `offset { sheetState.requireOffset() }` 平移，而 `eInkGrayscale` 的 `saveLayer` 图层按节点尺寸从原点截取，贴在 modifier 上会让平移后的内容只剩上半截（表现为弹窗下半部分被裁掉、透出下层页面）。
 - **例外**：**窗口背景图**（`window.decorView.background`，如主界面壁纸）在内容根之外，根层盖不到，要按 `Drawable` 挂 paint 级滤镜（`ThemeConfig.getBgImage` 的 `withEInkFilter`）。这类滤镜不改解码结果、不额外开图层，代价可忽略；`CoverImageView` 等少量控件同样保留 paint 级滤镜作兜底。

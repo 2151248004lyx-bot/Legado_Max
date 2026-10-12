@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import io.legado.app.R
 import io.legado.app.data.appDb
+import io.legado.app.lib.theme.EInkRender
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.model.webBook.SourceSearchRecord
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
@@ -35,6 +36,9 @@ class SearchSourceStatusDialog : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // 墨水屏渲染：弹窗是独立窗口，Activity 内容根那层盖不到。本类不是 BaseDialogFragment
+        // （走的是 BottomSheet），没有那套统一处理，这里自己补一层灰阶
+        EInkRender.applyRootLayer(dialog?.window?.findViewById(android.R.id.content))
         // 设置 BottomSheet 背景为应用主题背景色
         (view.parent as? View)?.setBackgroundColor(backgroundColor)
 

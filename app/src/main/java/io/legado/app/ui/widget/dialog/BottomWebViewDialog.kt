@@ -66,6 +66,7 @@ import androidx.core.view.size
 import io.legado.app.constant.AppConst.imagePathKey
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.lib.theme.EInkRender
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
@@ -159,6 +160,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     override fun onStart() {
         super.onStart()
         setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        // 墨水屏渲染：弹窗是独立窗口，Activity 内容根那层盖不到。本类不是 BaseDialogFragment
+        // （走的是 BottomSheet），没有那套统一处理，这里自己补一层灰阶
+        EInkRender.applyRootLayer(dialog?.window?.findViewById(android.R.id.content))
     }
 
     override fun show(manager: FragmentManager, tag: String?) {
