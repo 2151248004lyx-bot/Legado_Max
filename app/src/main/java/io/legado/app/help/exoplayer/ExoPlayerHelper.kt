@@ -143,6 +143,23 @@ object ExoPlayerHelper {
         return mediaItemBuilder.build()
     }
 
+    /**
+     * 普通（渐进式）媒体源工厂——播放器自带的工厂与"按地址临时建源"共用同一份配置
+     *
+     * **必须显式开启恒定码率 seek**：`.aac`(ADTS)、CBR `.mp3` 这类不带索引的文件，ExoPlayer 只能按
+     * "输入长度 ÷ 平均码率"估算时长与 seek 点；开关关掉时 `duration` 返回 `C.TIME_UNSET`，
+     * 进度条 max 落到 1，表现为"不显示进度、一拖就回到开头"。
+     * 音频/视频都走 `setMediaSource` 传入这里新建的工厂——单独建源时若另配一份工厂，
+     * 等于把播放器那份配置整个绕过（2026-10-01 音频改走 setMediaSource 后就是这样漏的）。
+     */
+    private fun progressiveMediaSourceFactory(
+        context: Context,
+        dataSourceFactory: DataSource.Factory,
+    ): DefaultMediaSourceFactory = DefaultMediaSourceFactory(
+        context,
+        DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true),
+    ).setDataSourceFactory(dataSourceFactory).setLiveTargetOffsetMs(5000)
+
     fun createHttpExoPlayer(context: Context): ExoPlayer = ExoPlayer.Builder(context).setLoadControl(
         DefaultLoadControl.Builder().setBufferDurationsMs(
             DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
@@ -150,13 +167,7 @@ object ExoPlayerHelper {
             DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS / 10,
             DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS / 10,
         ).build(),
-    ).setMediaSourceFactory(
-        DefaultMediaSourceFactory(
-            context,
-            DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true),
-        ).setDataSourceFactory(resolvingDataSource)
-            .setLiveTargetOffsetMs(5000),
-    ).build()
+    ).setMediaSourceFactory(progressiveMediaSourceFactory(context, resolvingDataSource)).build()
 
     private val resolvingDataSource: ResolvingDataSource.Factory by lazy {
         ResolvingDataSource.Factory(cacheDataSourceFactory) {
@@ -371,11 +382,10 @@ object ExoPlayerHelper {
         cacheDir: File? = null,
         mimeType: String? = null,
         writable: Boolean = true,
-    ): MediaSource = DefaultMediaSourceFactory(
+    ): MediaSource = progressiveMediaSourceFactory(
+        context,
         mediaPlaybackDataSourceFactory(url, headers, cacheDir, writable),
-    )
-        .setLiveTargetOffsetMs(5000)
-        .createMediaSource(
+    ).createMediaSource(
             MediaItem.Builder()
                 .setUri(url)
                 .setMimeType(mimeType ?: mediaMimeTypeOfUrl(url))
@@ -744,19 +754,19 @@ object ExoPlayerHelper {
         }
         if (uris.size <= 1) {
             val singleUrl = uris.firstOrNull() ?: url
-            return DefaultMediaSourceFactory(dataSourceFactory)
-                .setLiveTargetOffsetMs(5000)
-                .createMediaSource(
-                    MediaItem.Builder()
-                        .setUri(singleUrl)
-                        .setMimeType(mediaMimeTypeOfUrl(singleUrl))
-                        .build(),
-                )
+            return progressiveMediaSourceFactory(context, dataSourceFactory).createMediaSource(
+                MediaItem.Builder()
+                    .setUri(singleUrl)
+                    .setMimeType(mediaMimeTypeOfUrl(singleUrl))
+                    .build(),
+            )
         }
+        //多段拼接同样按恒定码率 seek，否则每段都拿不到时长、播完一段进度条就回一次 0
+        val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val mediaSourceBuilder = ConcatenatingMediaSource2.Builder()
         for (uri in uris) {
             mediaSourceBuilder.add(
-                ProgressiveMediaSource.Factory(dataSourceFactory)
+                ProgressiveMediaSource.Factory(dataSourceFactory, extractorsFactory)
                     .createMediaSource(MediaItem.fromUri(uri)),
                 3000,
             )

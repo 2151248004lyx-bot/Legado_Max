@@ -353,9 +353,22 @@ class AudioPlayService : BaseService(),
     }
 
     /**
+     * 播放器时长（毫秒），拿不到有效时长时返回 0
+     *
+     * 没有索引的媒体（如 ADTS `.aac`）若 ExoPlayer 估不出时长会返回 [C.TIME_UNSET]，
+     * 直接 `toInt()` 得到的是 1 —— 进度条 max 被设成 1，等于永远没有进度、一拖就回到开头。
+     */
+    private fun validDurationMs(): Int {
+        val duration = exoPlayer.duration
+        return if (duration in 1..Int.MAX_VALUE.toLong()) duration.toInt() else 0
+    }
+
+    /**
      * 调节进度
      */
     private fun adjustProgress(position: Int) {
+        //时长未知/不可 seek 的媒体直接忽略：此时 seekTo 只会落到 0，表现为"一拖就回到开头"
+        if (!exoPlayer.isCurrentMediaItemSeekable) return
         this.position = position
         exoPlayer.seekTo(position.toLong())
     }
@@ -398,17 +411,20 @@ class AudioPlayService : BaseService(),
                     AudioPlay.status = Status.PAUSE
                     postEvent(EventBus.AUDIO_STATE, Status.PAUSE)
                 }
-                postEvent(EventBus.AUDIO_SIZE, exoPlayer.duration.toInt())
-                lastDuration = exoPlayer.duration.toInt()
+                val duration = validDurationMs()
+                lastDuration = duration
+                if (duration > 0) {
+                    postEvent(EventBus.AUDIO_SIZE, duration)
+                    AudioPlay.saveDurChapter(duration.toLong())
+                }
                 upMediaMetadata()
                 upPlayProgress()
-                AudioPlay.saveDurChapter(exoPlayer.duration)
             }
 
             Player.STATE_ENDED -> {
                 // 结束
                 upPlayProgressJob?.cancel()
-                AudioPlay.playPositionChanged(exoPlayer.duration.toInt())
+                AudioPlay.playPositionChanged(validDurationMs())
                 AudioPlay.next()
             }
         }
@@ -421,7 +437,7 @@ class AudioPlayService : BaseService(),
             .putText(MediaMetadataCompat.METADATA_KEY_TITLE, AudioPlay.durChapter?.title ?: "null")
             .putText(MediaMetadataCompat.METADATA_KEY_ARTIST, AudioPlay.book?.name ?: "null")
             .putText(MediaMetadataCompat.METADATA_KEY_ALBUM, AudioPlay.book?.author ?: "null")
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, exoPlayer.duration)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, validDurationMs().toLong())
             .build()
         mediaSessionCompat.setMetadata(metadata)
     }
@@ -497,8 +513,8 @@ class AudioPlayService : BaseService(),
                     postEvent(EventBus.AUDIO_BUFFER_PROGRESS, bufferedPosition)
                 }
                 postEvent(EventBus.AUDIO_PROGRESS, AudioPlay.durChapterPos)
-                val duration = exoPlayer.duration.toInt()
-                if (duration != lastDuration) {
+                val duration = validDurationMs()
+                if (duration > 0 && duration != lastDuration) {
                     lastDuration = duration
                     postEvent(EventBus.AUDIO_SIZE, duration)
                 }
@@ -510,17 +526,14 @@ class AudioPlayService : BaseService(),
                 //更新歌词
                 AudioPlay.callback?.upLyricP(durP.toInt())
                 // === 添加片尾跳过检查 ===
-                if (skipEnds > 0) {
-                    val duration = exoPlayer.duration
-                    if (duration > 0) {
-                        val skipThreshold = duration - (skipEnds * 1000L)
-                        if (durP >= skipThreshold) {
-                            //同Player.STATE_ENDED
-                            upPlayProgressJob?.cancel()
-                            AudioPlay.playPositionChanged(exoPlayer.duration.toInt())
-                            pause = true
-                            AudioPlay.next()
-                        }
+                if (skipEnds > 0 && duration > 0) {
+                    val skipThreshold = duration - (skipEnds * 1000L)
+                    if (durP >= skipThreshold) {
+                        //同Player.STATE_ENDED
+                        upPlayProgressJob?.cancel()
+                        AudioPlay.playPositionChanged(duration)
+                        pause = true
+                        AudioPlay.next()
                     }
                 }
                 delay(if (AudioPlay.callback != null) 500 else 1000)
@@ -562,6 +575,8 @@ class AudioPlayService : BaseService(),
         )
         mediaSessionCompat.setCallback(object : MediaSessionCompat.Callback() {
             override fun onSeekTo(pos: Long) {
+                //同 adjustProgress：不可 seek 的媒体上 seekTo 只会落到 0
+                if (!exoPlayer.isCurrentMediaItemSeekable) return
                 position = pos.toInt()
                 exoPlayer.seekTo(pos)
             }

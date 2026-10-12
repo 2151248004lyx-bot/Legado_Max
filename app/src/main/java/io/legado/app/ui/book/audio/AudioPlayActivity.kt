@@ -235,6 +235,8 @@ class AudioPlayActivity :
 
             override fun onStopTrackingTouch(seekBar: SeekBar) {
                 adjustProgress = false
+                //时长未知（max 为 0）时没有可定位的位置，别把已保存的播放进度打成 0
+                if (seekBar.max <= 0) return
                 AudioPlay.adjustProgress(seekBar.progress)
             }
         })

@@ -314,7 +314,8 @@ object AudioPlay : CoroutineScope by MainScope() {
     fun upDurChapter() {
         val book = book ?: return
         durChapter = appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)
-        durAudioSize = durChapter?.end?.toInt() ?: 0
+        //章节 end 存的是上次播放实测到的时长；历史数据里可能混进过 TIME_UNSET，别拿它当进度条 max
+        durAudioSize = durChapter?.end?.takeIf { it > 0 }?.toInt() ?: 0
         val title = durChapter?.title ?: appCtx.getString(R.string.data_loading)
         postEvent(EventBus.AUDIO_SUB_TITLE, title)
         postEvent(EventBus.AUDIO_SIZE, durAudioSize)
