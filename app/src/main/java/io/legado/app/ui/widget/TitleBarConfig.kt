@@ -215,11 +215,15 @@ private fun resolveTopBarSurfaceColor(
     return surface
 }
 
-/** 顶栏背后窗口背景的代表色：有主界面壁纸时按壁纸平均亮度取黑白，否则用主题背景色 */
+/**
+ * 顶栏背后窗口背景的代表色：有主界面壁纸时按**壁纸平均色**，否则用主题背景色。
+ *
+ * 取真实平均色而不是"按亮度取黑白"：顶栏底色与壁纸是半透明压在它上面的，只有同色系合成
+ * 才接近实际渲染出来的颜色；黑白近似会把中性色调的壁纸推成纯黑/纯白，贴着 0.5 阈值就判反。
+ */
 private fun windowBackgroundColor(context: Context): Int {
-    val luminance = ThemeConfig.getBgImageLuminance(context)
-        ?: return context.backgroundColor
-    return if (luminance > 0.5f) Color.WHITE else Color.BLACK
+    val path = ThemeConfig.resolveBgImagePath(context) ?: return context.backgroundColor
+    return ThemeConfig.getImageAverageColor(path) ?: context.backgroundColor
 }
 
 /**
