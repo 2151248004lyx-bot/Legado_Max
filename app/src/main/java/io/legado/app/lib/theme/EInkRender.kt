@@ -138,35 +138,37 @@ fun Modifier.eInkGrayscale(): Modifier {
 }
 
 /**
- * View 侧：把这段文本按墨水屏灰阶绘制。
+ * View 侧：把这段文本里的**彩色字形**（表情符号）按墨水屏灰阶绘制。
  *
  * 与 [Modifier.eInkGrayscale] 同一个目的，用在**窗口另开、应用拿不到引用**的 View 文本上。
  * 典型场景是 AppCompat 的菜单弹窗（发现页的分组下拉就是它）：窗口由框架内部创建，
- * 应用连引用都没有，挂不了整层灰阶；而菜单项标题里可能带表情符号
- * （用户把书源分组名写成「🎧有声」），那是字体里的彩色字形，不跟着主题色板走。
+ * 应用连引用都没有，挂不了整层灰阶。标题里的普通文字不用管——灰阶色板已经把它变灰，
+ * 只有表情符号是字体里的彩色字形（用户把分组名写成「🎧有声」），不跟色板走。
  *
- * 滤镜落在**这段文本自己的绘制**上：把文本绘制罩进一个离屏图层再合成，
- * 所以作用范围恰好是这段文本，不依赖窗口。关掉墨水屏渲染时直接返回原文本，零开销。
- *
- * 注意 span 覆盖的是**整段文本**，区间内的其他字符样式（颜色、字号…）会被整段替换绘制吃掉，
- * 所以只适合纯文本标题（本项目调用点传的都是 `String`）。
+ * **只在文本含非 BMP 字符（代理对，表情符号基本都是）时才挂 span**——这不是优化而是必须：
+ * 换绘制方式的做法只在**非 boring 的布局**下生效，纯 BMP 的短标题会走 `BoringLayout`，
+ * 那条路径不调用替换 span 的 `draw`，标题会整条变成空白（2026-10-13 实测：同一个菜单里
+ * 带表情的项正常、不带表情的项消失）。只含 BMP 表情（如 ❤️）的标题因此保持彩色，是刻意的稳妥取舍。
  */
 fun CharSequence.eInkGrayscale(): CharSequence {
     val filter = EInkRender.androidFilterOrNull() ?: return this
+    if (!hasAstralChar(this)) return this
     val spannable = if (this is Spannable) this else SpannableString(this)
     spannable.setSpan(GrayscaleSpan(filter), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     return spannable
 }
 
+/** 是否含非 BMP 字符（代理对），即表情符号这类字体自带彩色字形的字符 */
+private fun hasAstralChar(text: CharSequence): Boolean = text.any { it.isHighSurrogate() || it.isLowSurrogate() }
+
 /**
  * 把 span 覆盖的文本用一层灰阶滤镜重画。
  *
- * 必须是 [ReplacementSpan]、不能只用 [MetricAffectingSpan] 改 paint：实测给文本 paint 挂
- * `colorFilter` **不影响字体里的彩色表情字形**（它们走自己的绘制路径，不吃 paint 的滤镜），
+ * 必须是 [ReplacementSpan]：给文本 paint 挂 `colorFilter` 的办法对表情符号无效——
+ * 实测同一个菜单里 `paint.colorFilter` 只把汉字变灰，彩色字形照旧是彩色
+ * （`updateDrawState` 改的是那次绘制的 paint，表情字形不走它）。
  * 只有把这段绘制整体落到离屏图层上再合成，滤镜才会罩住表情符号——与 Compose 侧
  * [Modifier.eInkGrayscale] 的 `saveLayer` 同理。
- *
- * 代价是这段文本不再走系统默认的整行绘制，所以只用在菜单标题这类短文本上。
  */
 private class GrayscaleSpan(private val filter: ColorFilter) : ReplacementSpan() {
 
