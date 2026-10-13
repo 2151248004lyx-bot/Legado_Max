@@ -164,6 +164,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var editAutoComplete = appCtx.getPrefBoolean(PreferKey.editAutoComplete, true)
     var showBoardLine = appCtx.getPrefInt(PreferKey.showBoardLine, 1)
     var adaptSpecialStyle = appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
+
     // 阅读时保留正文里的空行（默认开启：不再压缩/丢弃原文的空行）
     // 只在阅读菜单里切换，这里自己落盘，保证重启后状态不丢
     var keepBlankLine = appCtx.getPrefBoolean(PreferKey.keepBlankLine, true)
