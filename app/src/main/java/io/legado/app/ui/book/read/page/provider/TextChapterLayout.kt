@@ -480,19 +480,25 @@ class TextChapterLayout(
      * 空行由 [io.legado.app.help.book.ContentProcessor] 在开启"保留空行"时以空段落的形式
      * 放进 textList，这里给它一个与正文行等高的空行，原文的空行在排版结果里就仍然留白。
      *
-     * 注意：这里 **不能** 标记 [TextLine.isParagraphEnd]，也不能往 stringBuilder 追加 "\n"。
-     * 一旦空行成为一个"段落"，page.text 里就会多出一个换行，TextChapter.paragraphs 里也
-     * 会多一个条目；而朗读的 contentList 会把空文本条目过滤掉
-     * （BaseReadAloudService: `.split("\n").filter { it.isNotEmpty() }`），
-     * 两个列表从此错位，听书高亮就会跟不上实际朗读的段落。
-     * 不标记段落结尾时，空行会被并入上一段——只贡献一行高度、不占字符，
-     * 排版效果不变，朗读索引也保持稳定。
+     * 空行不是段落，有三处约束：
+     * - **不能**标记 [TextLine.isParagraphEnd]，也**不能**往 stringBuilder 追加 "\n"：
+     *   page.text 里会多出一个换行，而朗读的 contentList 会把空文本条目过滤掉
+     *   （BaseReadAloudService: `.split("\n").filter { it.isNotEmpty() }`），两个列表从此错位，
+     *   听书高亮就会跟不上实际朗读的段落。
+     * - **不能**保留 [calcTextLinePosition] 算出来的段落号（故随后归零）：空行恰好排在分页边界
+     *   （它正好是某页最后一行、下一段从下一页开头排）时，该页会多出一个 0 字长的"幽灵段落"，
+     *   `TextPage.paragraphs` 比正文多一条，按页听书的段落索引
+     *   （[TextChapter.getParagraphNum] 的 pageSplit 分支）与实际朗读段落从此错一位。
+     * - 段落号归零不会断号：下一段的首行按 `paragraphNum > 0` 找到的是上一段的末行，
+     *   仍接在上一段之后编号。
      */
     private suspend fun addBlankLine() {
         prepareNextPageIfNeed(durY + contentPaintTextHeight)
         val textLine = TextLine()
         textLine.text = ""
+        // 只借 calcTextLinePosition 算好行在章节/页面里的字符位置，段落号随后归零
         calcTextLinePosition(textPages, textLine, stringBuilder.length)
+        textLine.paragraphNum = 0
         textLine.upTopBottom(durY, contentPaintTextHeight, contentPaintFontMetrics)
         val textPage = pendingTextPage
         textPage.addLine(textLine)
