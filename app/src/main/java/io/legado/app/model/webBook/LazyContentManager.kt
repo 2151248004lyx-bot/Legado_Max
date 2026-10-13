@@ -169,6 +169,7 @@ class LazyContentManager(
                                 placeholder
                             }
                         }
+                        // 保留空行：网页正文的连续换行在这里决定留不留（关闭该开关时会被压平）
                         content = HtmlFormatter.formatKeepImg(content, rUrl, AppConfig.keepBlankLine)
                         if (content.indexOf('&') > -1) {
                             content = StringEscapeUtils.unescapeHtml4(content)

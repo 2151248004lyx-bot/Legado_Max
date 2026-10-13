@@ -28,7 +28,6 @@ import io.legado.app.ui.book.read.TextMenuConfigDialog
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
-import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.removePref
@@ -36,15 +35,15 @@ import io.legado.app.utils.setEdgeEffectColor
 
 /**
  * 阅读界面"更多设置"对话框
- * 
+ *
  * 显示在阅读界面底部的设置面板，包含阅读相关的各项配置：
  * - 屏幕方向、屏幕超时
  * - 状态栏/导航栏显示
  * - 双页模式、进度条行为
- * - 排版设置（两端对齐、底部对齐、中文排版）
+ * - 排版设置（两端对齐、底部对齐、中文排版、保留空行）
  * - 翻页设置（音量键翻页、鼠标滚轮翻页、触摸灵敏度）
  * - 其他设置（文字选择、亮度显示、自定义按键等）
- * 
+ *
  * 使用 PreferenceFragment 加载 XML 配置，支持实时响应配置变更。
  */
 class MoreConfigDialog : BasePrefDialogFragment() {
@@ -70,7 +69,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
+        savedInstanceState: Bundle?,
     ): View {
         (activity as ReadBookActivity).bottomDialog++
         val view = LinearLayout(context)
@@ -94,7 +93,8 @@ class MoreConfigDialog : BasePrefDialogFragment() {
         (activity as ReadBookActivity).bottomDialog--
     }
 
-    class ReadPreferenceFragment : PreferenceFragment(),
+    class ReadPreferenceFragment :
+        PreferenceFragment(),
         SharedPreferences.OnSharedPreferenceChangeListener {
 
         /** 系统默认触摸灵敏度阈值 */
@@ -140,7 +140,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
          */
         override fun onSharedPreferenceChanged(
             sharedPreferences: SharedPreferences?,
-            key: String?
+            key: String?,
         ) {
             when (key) {
                 PreferKey.readBodyToLh -> activity?.recreate()
@@ -164,7 +164,9 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 PreferKey.textBottomJustify,
                 PreferKey.useZhLayout,
                 PreferKey.allowPunctAtLineStart,
-                PreferKey.adaptSpecialStyle-> {
+                PreferKey.adaptSpecialStyle,
+                PreferKey.keepBlankLine,
+                -> {
                     postEvent(EventBus.UP_CONFIG, arrayListOf(5))
                 }
 
@@ -182,7 +184,8 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 }
 
                 PreferKey.showReadTitleAddition,
-                PreferKey.readBarStyleFollowPage -> {
+                PreferKey.readBarStyleFollowPage,
+                -> {
                     postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
                 }
 
@@ -209,7 +212,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
         /**
          * 偏好设置点击事件处理
          * 处理需要弹出对话框进行设置的配置项
-         * 
+         *
          * 主要处理：
          * - customPageKey: 自定义翻页按键
          * - clickRegionalConfig: 点击区域配置
@@ -281,10 +284,10 @@ class MoreConfigDialog : BasePrefDialogFragment() {
         private fun upPreferenceSummary(preferenceKey: String, value: String?) {
             val preference = findPreference<Preference>(preferenceKey) ?: return
             when (preferenceKey) {
-                PreferKey.pageTouchSlop -> preference.summary =
-                    getString(R.string.page_touch_slop_summary, value)
+                PreferKey.pageTouchSlop ->
+                    preference.summary =
+                        getString(R.string.page_touch_slop_summary, value)
             }
         }
-
     }
 }

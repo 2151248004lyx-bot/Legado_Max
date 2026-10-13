@@ -95,13 +95,6 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/menu_keep_blank_line"
-        android:checkable="true"
-        android:checked="true"
-        android:title="@string/keep_blank_line"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/menu_re_segment"
         android:checkable="true"
         android:checked="false"
