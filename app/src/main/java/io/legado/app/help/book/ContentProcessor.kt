@@ -26,7 +26,7 @@ import java.util.regex.Pattern
 
 class ContentProcessor private constructor(
     private val bookName: String,
-    private val bookOrigin: String
+    private val bookOrigin: String,
 ) {
 
     companion object {
@@ -50,7 +50,6 @@ class ContentProcessor private constructor(
                 it.value.get()?.upReplaceRules()
             }
         }
-
     }
 
     private val titleReplaceRules = CopyOnWriteArrayList<ReplaceRule>()
@@ -89,14 +88,10 @@ class ContentProcessor private constructor(
         removeSameTitleCache.addAll(files)
     }
 
-    fun getTitleReplaceRules(): List<ReplaceRule> {
-        return titleReplaceRules
-    }
+    fun getTitleReplaceRules(): List<ReplaceRule> = titleReplaceRules
 
     @Suppress("MemberVisibilityCanBePrivate")
-    fun getContentReplaceRules(): List<ReplaceRule> {
-        return contentReplaceRules
-    }
+    fun getContentReplaceRules(): List<ReplaceRule> = contentReplaceRules
 
     fun getContent(
         book: Book,
@@ -106,66 +101,74 @@ class ContentProcessor private constructor(
         useReplace: Boolean = true,
         chineseConvert: Boolean = true,
         reSegment: Boolean = true,
-        forceRemoveTitle: Boolean = false
+        forceRemoveTitle: Boolean = false,
     ): BookContent {
         var mContent = content
         var sameTitleRemoved = false
         var effectiveReplaceRules: ArrayList<ReplaceRule>? = null
         val replaceBook by lazy { book.toReplaceBook() }
         if (content != "null") {
-            //去除重复标题
+            // 去除重复标题
             // 按单章按需检查 .nr 文件，避免在 init 中扫描整本书缓存目录
-            if (BookHelp.removeSameTitle(book, chapter)) try {
-                val name = Pattern.quote(book.name)
-                var title = chapter.title.escapeRegex().replace(spaceRegex, "\\\\s*")
-                var matcher = Pattern.compile("^(\\s|\\p{P}|${name})*${title}(\\s)*")
-                    .matcher(mContent)
-                if (matcher.find()) {
-                    mContent = mContent.substring(matcher.end())
-                    sameTitleRemoved = true
-                } else if (useReplace && book.getUseReplaceRule()) {
-                    title = Pattern.quote(
-                        chapter.getDisplayTitle(
-                            titleReplaceRules,
-                            chineseConvert = false,
-                            replaceBook = replaceBook
-                        )
-                    )
-                    matcher = Pattern.compile("^(\\s|\\p{P}|${name})*${title}(\\s)*")
+            if (BookHelp.removeSameTitle(book, chapter)) {
+                try {
+                    val name = Pattern.quote(book.name)
+                    var title = chapter.title.escapeRegex().replace(spaceRegex, "\\\\s*")
+                    var matcher = Pattern.compile("^(\\s|\\p{P}|$name)*$title(\\s)*")
                         .matcher(mContent)
                     if (matcher.find()) {
                         mContent = mContent.substring(matcher.end())
                         sameTitleRemoved = true
+                    } else if (useReplace && book.getUseReplaceRule()) {
+                        title = Pattern.quote(
+                            chapter.getDisplayTitle(
+                                titleReplaceRules,
+                                chineseConvert = false,
+                                replaceBook = replaceBook,
+                            ),
+                        )
+                        matcher = Pattern.compile("^(\\s|\\p{P}|$name)*$title(\\s)*")
+                            .matcher(mContent)
+                        if (matcher.find()) {
+                            mContent = mContent.substring(matcher.end())
+                            sameTitleRemoved = true
+                        }
                     }
-                }
-                // 如果正则匹配失败且强制移除标题，尝试移除第一行
-                if (!sameTitleRemoved && forceRemoveTitle) {
-                    val firstLine = mContent.lines().firstOrNull()?.trim() ?: ""
-                    val chapterTitle = chapter.title.trim()
-                    val displayTitle = chapter.getDisplayTitle(
-                        titleReplaceRules,
-                        useReplace = useReplace && book.getUseReplaceRule(),
-                        chineseConvert = false,
-                        replaceBook = replaceBook
-                    ).trim()
-                    // 如果第一行与标题相同或相似，移除第一行
-                    if (firstLine.isNotEmpty() && 
-                        (firstLine == chapterTitle || firstLine == displayTitle ||
-                         firstLine.contains(chapterTitle) || chapterTitle.contains(firstLine) ||
-                         firstLine.contains(displayTitle) || displayTitle.contains(firstLine))) {
-                        mContent = mContent.removePrefix(firstLine).trimStart()
-                        sameTitleRemoved = true
+                    // 如果正则匹配失败且强制移除标题，尝试移除第一行
+                    if (!sameTitleRemoved && forceRemoveTitle) {
+                        val firstLine = mContent.lines().firstOrNull()?.trim() ?: ""
+                        val chapterTitle = chapter.title.trim()
+                        val displayTitle = chapter.getDisplayTitle(
+                            titleReplaceRules,
+                            useReplace = useReplace && book.getUseReplaceRule(),
+                            chineseConvert = false,
+                            replaceBook = replaceBook,
+                        ).trim()
+                        // 如果第一行与标题相同或相似，移除第一行
+                        if (firstLine.isNotEmpty() &&
+                            (
+                                firstLine == chapterTitle ||
+                                    firstLine == displayTitle ||
+                                    firstLine.contains(chapterTitle) ||
+                                    chapterTitle.contains(firstLine) ||
+                                    firstLine.contains(displayTitle) ||
+                                    displayTitle.contains(firstLine)
+                                )
+                        ) {
+                            mContent = mContent.removePrefix(firstLine).trimStart()
+                            sameTitleRemoved = true
+                        }
                     }
+                } catch (e: Exception) {
+                    AppLog.put("去除重复标题出错\n${e.localizedMessage}", e)
                 }
-            } catch (e: Exception) {
-                AppLog.put("去除重复标题出错\n${e.localizedMessage}", e)
             }
             if (reSegment && book.getReSegment()) {
-                //重新分段
+                // 重新分段
                 // 先保护 img 标签，避免被分段算法破坏引号和空格
                 val imgMap = mutableMapOf<String, String>()
                 val imgMatcher = AppPattern.imgPattern.matcher(mContent)
-                val imgSb = StringBuffer()  //Matcher.appendTail(StringBuilder) 和 Matcher.appendReplacement(StringBuilder, String) 这两个方法是 Android API 26（Android 8.0）才新增的。你的设备系统低于 Android 8.0，所以运行时报 NoSuchMethodError。修复：将 StringBuilder 改为 StringBuffer。StringBuffer 版本的 appendTail 和 appendReplacement 从 API 1 就存在，兼容所有 Android 版本。两者功能完全一致，唯一区别是 StringBuffer 是线程安全的（在这个局部变量场景下没有性能影响）。
+                val imgSb = StringBuffer() // Matcher.appendTail(StringBuilder) 和 Matcher.appendReplacement(StringBuilder, String) 这两个方法是 Android API 26（Android 8.0）才新增的。你的设备系统低于 Android 8.0，所以运行时报 NoSuchMethodError。修复：将 StringBuilder 改为 StringBuffer。StringBuffer 版本的 appendTail 和 appendReplacement 从 API 1 就存在，兼容所有 Android 版本。两者功能完全一致，唯一区别是 StringBuffer 是线程安全的（在这个局部变量场景下没有性能影响）。
                 while (imgMatcher.find()) {
                     val placeholder = "图片占位符${imgMap.size}号"
                     imgMap[placeholder] = imgMatcher.group()
@@ -180,7 +183,7 @@ class ContentProcessor private constructor(
                 }
             }
             if (chineseConvert) {
-                //简繁转换
+                // 简繁转换
                 try {
                     when (AppConfig.chineseConverterType) {
                         1 -> mContent = ChineseUtils.t2s(mContent)
@@ -191,7 +194,7 @@ class ContentProcessor private constructor(
                 }
             }
             val useHtmlMap = mutableMapOf<String, String>()
-            if (AppConfig.adaptSpecialStyle) { //html处理
+            if (AppConfig.adaptSpecialStyle) { // html处理
                 mContent = AppPattern.useHtmlRegex.replace(mContent) { matchResult ->
                     val placeholder = "特殊格式的占位不应该被看见${useHtmlMap.size}。"
                     useHtmlMap[placeholder] = "\n${matchResult.value.replace("\n","")}\n"
@@ -199,7 +202,7 @@ class ContentProcessor private constructor(
                 }
             }
             if (useReplace && book.getUseReplaceRule()) {
-                //替换
+                // 替换
                 effectiveReplaceRules = arrayListOf()
                 mContent = mContent.lines().joinToString("\n") { it.trim() }
                 getContentReplaceRules().forEach { item ->
@@ -214,7 +217,7 @@ class ContentProcessor private constructor(
                                 item.replacement,
                                 item.getValidTimeoutMillisecond(),
                                 chapter,
-                                replaceBook
+                                replaceBook,
                             )
                         } else {
                             mContent.replace(item.pattern, item.replacement)
@@ -229,7 +232,7 @@ class ContentProcessor private constructor(
                         mContent = item.name + e.stackTraceStr
                     } catch (_: CancellationException) {
                     } catch (e: Exception) {
-                        AppLog.put("替换净化: 规则 ${item.name}替换出错.\n${mContent}", e)
+                        AppLog.put("替换净化: 规则 ${item.name}替换出错.\n$mContent", e)
                         appCtx.toastOnUi("替换净化: 规则 ${item.name}替换出错")
                     }
                 }
@@ -239,11 +242,11 @@ class ContentProcessor private constructor(
             }
         }
         if (includeTitle) {
-            //重新添加标题
+            // 重新添加标题
             mContent = chapter.getDisplayTitle(
                 getTitleReplaceRules(),
                 useReplace = useReplace && book.getUseReplaceRule(),
-                replaceBook = replaceBook
+                replaceBook = replaceBook,
             ) + "\n" + mContent
         }
         if (isAndroid8) {
@@ -267,7 +270,13 @@ class ContentProcessor private constructor(
                 contents.add("")
             }
         }
+        if (keepBlankLine) {
+            // 章节末尾同样不留空白：正文末尾的换行/空标签会被 format 还原成空段落，
+            // 不清理的话每章结尾都会多出一到两个空行
+            while (contents.isNotEmpty() && contents.last().isEmpty()) {
+                contents.removeAt(contents.lastIndex)
+            }
+        }
         return BookContent(sameTitleRemoved, contents, effectiveReplaceRules)
     }
-
 }
