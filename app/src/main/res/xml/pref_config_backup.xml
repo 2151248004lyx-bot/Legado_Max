@@ -104,6 +104,15 @@
             android:title="@string/restore_ignore"
             app:iconSpaceReserved="false" />
 
+        <io.legado.app.lib.prefs.NameListPreference
+            android:defaultValue="merge"
+            android:key="restorePolicy"
+            android:summary="@string/restore_policy_s"
+            android:title="@string/restore_policy_t"
+            app:entries="@array/restore_policy_entries"
+            app:entryValues="@array/restore_policy_values"
+            app:iconSpaceReserved="false" />
+
         <io.legado.app.lib.prefs.SwitchPreference
             android:defaultValue="true"
             android:key="restoreShowSelector"
@@ -140,11 +149,10 @@
             app:allowDividerAbove="false"
             app:iconSpaceReserved="false" />
 
-        <io.legado.app.lib.prefs.SwitchPreference
-            android:defaultValue="false"
-            android:key="backupAllChapters"
-            android:summary="@string/backup_all_chapters_s"
-            android:title="@string/backup_all_chapters_t"
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="backupPassword"
+            android:summary="@string/backup_password_s"
+            android:title="@string/backup_password_t"
             app:allowDividerAbove="false"
             app:iconSpaceReserved="false" />
 
@@ -159,6 +167,7 @@
         <io.legado.app.lib.prefs.NameListPreference
             android:defaultValue="5"
             android:key="backupKeepCount"
+            android:summary="@string/backup_keep_count_s"
             android:title="@string/backup_keep_count_t"
             app:entries="@array/backup_keep_count_entries"
             app:entryValues="@array/backup_keep_count_values"

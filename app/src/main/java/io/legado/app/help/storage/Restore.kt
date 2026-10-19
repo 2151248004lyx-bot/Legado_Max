@@ -154,7 +154,7 @@ object Restore {
     suspend fun restore(
         context: Context,
         uri: Uri,
-        policy: RestorePolicy = RestorePolicy.Merge,
+        policy: RestorePolicy = RestorePolicy.fromKey(AppConfig.restorePolicyKey),
         onProgress: ((String) -> Unit)? = null,
     ) {
         LogUtils.d(TAG, "开始恢复备份 uri:$uri policy:${policy.key}")
@@ -206,7 +206,7 @@ object Restore {
      */
     suspend fun restoreLocked(
         path: String,
-        policy: RestorePolicy = RestorePolicy.Merge,
+        policy: RestorePolicy = RestorePolicy.fromKey(AppConfig.restorePolicyKey),
         onProgress: ((String) -> Unit)? = null,
     ) {
         mutex.withLock {
@@ -223,7 +223,7 @@ object Restore {
         context: Context,
         path: String,
         selectedFiles: List<String>,
-        policy: RestorePolicy = RestorePolicy.Merge,
+        policy: RestorePolicy = RestorePolicy.fromKey(AppConfig.restorePolicyKey),
         onProgress: ((String) -> Unit)? = null,
     ) {
         LogUtils.d(TAG, "开始选择性恢复 path:$path files:${selectedFiles.joinToString()} policy:${policy.key}")
@@ -1307,7 +1307,10 @@ object Restore {
         }
 
         restoreBookCacheBooks(path, cacheIndexList)
-        restoreBookChapterCache(path)
+        // 新包已带 bookChapter.json（DB 阶段统一恢复），避免重复 delByBook + insert
+        if (!File(path, "bookChapter.json").exists()) {
+            restoreBookChapterCache(path)
+        }
 
         val backupCacheDir = resolveBackupCacheDir(path, cacheIndexList)
         if (backupCacheDir == null) {

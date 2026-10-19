@@ -953,8 +953,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     /** 恢复前自动生成快照，默认开启。 */
     val preRestoreSnapshot get() = appCtx.getPrefBoolean(PreferKey.preRestoreSnapshot, true)
 
-    /** 章节目录备份范围：默认只备有缓存目录的书。 */
-    val backupAllChapters get() = appCtx.getPrefBoolean(PreferKey.backupAllChapters, false)
+    /**
+     * 恢复方式，持久化保存："merge"（默认，只补不删）/ "replace"（覆盖）。
+     *
+     * 作为默认值直接用于恢复流程，不再每次恢复弹窗询问。
+     */
+    val restorePolicyKey: String
+        get() = appCtx.getPrefString(PreferKey.restorePolicy, "merge") ?: "merge"
 
     /** 整包加密，默认关闭（保留手动解压查看能力）。 */
     val backupEncrypt get() = appCtx.getPrefBoolean(PreferKey.backupEncrypt, false)

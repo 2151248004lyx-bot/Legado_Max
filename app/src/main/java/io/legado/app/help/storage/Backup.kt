@@ -793,6 +793,13 @@ object Backup {
                     }
                 }
                 LocalConfig.lastLocalBackupSuccess = System.currentTimeMillis()
+                if (!path.isNullOrBlank() && !path.isContentScheme()) {
+                    cleanupLocalBackups(
+                        path = path,
+                        keep = AppConfig.backupKeepCount,
+                        onlyLatest = AppConfig.onlyLatestBackup,
+                    )
+                }
             }
 
             // 上传到WebDav云端（仅本地模式时跳过）
@@ -1101,20 +1108,13 @@ object Backup {
     /**
      * 备份章节目录。
      *
-     * 默认只导出「有缓存目录」的书籍：它们才是离线阅读真正需要目录的那批，
-     * 体积可控。开启 [AppConfig.backupAllChapters] 后导出全量目录。
+     * 只导出「有缓存目录」的书籍：它们才是离线阅读真正需要目录的那批，
+     * 体积可控。缓存书范围由「书籍缓存选择」决定。
      */
     private suspend fun stageBookChapters(rootPath: String) {
-        val books = if (AppConfig.backupAllChapters) {
-            appDb.bookDao.all
-        } else {
-            val cacheDir = File(BookHelp.cachePath)
-            val cachedFolders = cacheDir.listFiles()
-                ?.filter { it.isDirectory }
-                ?.mapTo(hashSetOf()) { it.name }
-                .orEmpty()
-            appDb.bookDao.all.filter { it.getFolderName() in cachedFolders }
-        }
+        // 范围与「书籍缓存选择」保持一致：只导出用户选中、且缓存目录仍存在的书
+        val books = BookCacheSelectorConfig.getSelectedBooks()
+            .filter { File(BookHelp.cachePath, it.getFolderName()).isDirectory }
         val chapters = books.flatMap { appDb.bookChapterDao.getChapterList(it.bookUrl) }
         if (chapters.isNotEmpty()) {
             writeListToJson(chapters, "bookChapter.json", rootPath)
@@ -1236,6 +1236,28 @@ object Backup {
             ?.sortedByDescending { it.lastModified() }
             ?.drop(3)
             ?.forEach { FileUtils.delete(it.absolutePath) }
+    }
+
+    /**
+     * 清理本地旧备份，按设备分组保留最近 [keep] 份。
+     *
+     * [onlyLatest] 开启时本地只保留固定命名的 `backup-latest-*.zip`，
+     * 其余时间戳包全部清掉，避免与「保留最近备份数」叠加成两份。
+     */
+    private fun cleanupLocalBackups(path: String, keep: Int, onlyLatest: Boolean) {
+        val dir = File(path).takeIf { it.isDirectory } ?: return
+        val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
+        val max = if (onlyLatest) 0 else keep.coerceAtLeast(1)
+        dir.listFiles()
+            ?.filter { it.isFile && it.name.startsWith("backup") && it.name.endsWith(".zip") }
+            ?.filter { !it.name.startsWith("backup-latest") }
+            ?.filter { deviceName == null || it.name.contains(deviceName) }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(max)
+            ?.forEach {
+                FileUtils.delete(it.absolutePath)
+                LogUtils.d(TAG, "已清理本地旧备份: ${it.name}")
+            }
     }
 
     /**

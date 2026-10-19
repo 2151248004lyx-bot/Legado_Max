@@ -175,4 +175,12 @@
         <item>10</item>
         <item>30</item>
     </string-array>
+    <string-array name="restore_policy_entries">
+        <item>合并（保留本地独有数据）</item>
+        <item>覆盖（删除本地独有数据）</item>
+    </string-array>
+    <string-array name="restore_policy_values">
+        <item>merge</item>
+        <item>replace</item>
+    </string-array>
 </resources>

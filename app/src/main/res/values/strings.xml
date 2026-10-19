@@ -1500,7 +1500,7 @@
     <string name="set_local_password">Setting the local password</string>
     <string name="set_local_password_summary">The local password is used to encrypt and decrypt the sensitive information of the backup, if you need to synchronize between different devices, the local password should be the same.</string>
     <string name="only_latest_backup_t">Keep only the latest backup</string>
-    <string name="only_latest_backup_s">Local backup keeps only the latest backup file</string>
+    <string name="only_latest_backup_s">Keep only one latest local backup (fixed name, overwritten); cloud copies are controlled by "Keep recent backups"</string>
     <string name="backup_selector">Backup Selector</string>
     <string name="backup_selector_summary">Set local and WebDAV backup items separately</string>
     <string name="backup_scope_local">Local backup</string>
@@ -2701,14 +2701,14 @@ Night: %5$s / %6$s / %7$s / %8$s</string>
     <!--Backup restore-->
     <string name="pre_restore_snapshot_t">Pre-restore snapshot</string>
     <string name="pre_restore_snapshot_s">Back up the database and chapter lists before restoring; keeps 3 copies</string>
-    <string name="backup_all_chapters_t">Back up all chapter lists</string>
-    <string name="backup_all_chapters_s">Off: only books with cached chapters; On: all books</string>
+    <string name="restore_policy_t">Restore policy</string>
+    <string name="restore_policy_s">Merge only adds data; Overwrite removes local-only data</string>
+    <string name="backup_password_t">Backup password</string>
+    <string name="backup_password_s">Used to encrypt the WebDAV backup package and sensitive config; empty means encryption is skipped</string>
+    <string name="backup_password_unset">Not set</string>
+    <string name="backup_keep_count_s">Copies kept per device, both locally and in the cloud</string>
     <string name="backup_encrypt_t">Encrypt backup package</string>
-    <string name="backup_encrypt_s">AES-GCM with the backup password; set a password first</string>
+    <string name="backup_encrypt_s">AES-GCM applies to the uploaded WebDAV package only; set the backup password first</string>
     <string name="backup_keep_count_t">Keep recent backups</string>
-    <string name="restore_policy_title">Restore policy</string>
-    <string name="restore_policy_merge">Merge (keep local-only data)</string>
-    <string name="restore_policy_replace">Overwrite (remove local-only data)</string>
-    <string name="restore_policy_replace_confirm">Overwrite deletes data that exists locally but not in the backup. Continue?</string>
     <string name="fvd_manifest_summary">%1$s · %2$s · %3$d items</string>
 </resources>

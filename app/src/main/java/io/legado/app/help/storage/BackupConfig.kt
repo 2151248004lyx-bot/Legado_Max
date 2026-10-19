@@ -96,6 +96,7 @@ object BackupConfig {
         PreferKey.webServiceWakeLock,
         PreferKey.readAloudWakeLock,
         PreferKey.audioPlayWakeLock,
+        PreferKey.backupPassword,
     )
 
     /**

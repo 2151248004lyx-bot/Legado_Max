@@ -327,8 +327,11 @@ object AppWebDav {
     private suspend fun latestManifestSignature(): String? {
         val authorization = authorization ?: return null
         if (!NetworkUtils.isAvailable()) return null
+        val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
         val latest = WebDav(rootWebDavUrl, authorization).listFiles()
             .filter { it.displayName.startsWith("backup") && it.displayName.endsWith(".manifest.json") }
+            // 只和本设备的备份比较，避免另一台设备内容相同导致本设备跳过上传
+            .filter { deviceName == null || it.displayName.contains(deviceName) }
             .maxByOrNull { it.lastModify }
             ?: return null
         val bytes = WebDav(rootWebDavUrl + latest.displayName, authorization).download()

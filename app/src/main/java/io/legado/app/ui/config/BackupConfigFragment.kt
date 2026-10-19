@@ -74,7 +74,6 @@ class BackupConfigFragment : PreferenceFragment(),
     private var backupJob: Job? = null
     private var restoreJob: Job? = null
     private var backupLocalOnly = false
-    private var restorePolicy = RestorePolicy.Merge
 
     private fun updateWaitDialog(prefix: String, itemName: String) {
         listView.post {
@@ -112,7 +111,7 @@ class BackupConfigFragment : PreferenceFragment(),
                 waitDialog.setText(getString(R.string.fvd_restoring))
                 waitDialog.show()
                 val task = Coroutine.async {
-                    Restore.restore(appCtx, uri, restorePolicy) { itemName ->
+                    Restore.restore(appCtx, uri, currentRestorePolicy()) { itemName ->
                         updateWaitDialog(getString(R.string.restore), itemName)
                     }
                 }.onFinally {
@@ -137,6 +136,21 @@ class BackupConfigFragment : PreferenceFragment(),
                 editText.inputType =
                     InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
                 editText.setSelection(editText.text.length)
+            }
+        }
+        findPreference<EditTextPreference>(PreferKey.backupPassword)?.let { pref ->
+            // 值存在 LocalConfig（隔离在 local_plus），不进默认 prefs、也不进 config.xml 备份
+            pref.summary = backupPasswordSummary(LocalConfig.password)
+            pref.setOnBindEditTextListener { editText ->
+                editText.inputType =
+                    InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
+                editText.setText(LocalConfig.password ?: "")
+            }
+            pref.setOnPreferenceChangeListener { preference, value ->
+                val password = value?.toString()?.takeIf { it.isNotBlank() }
+                LocalConfig.password = password
+                (preference as EditTextPreference).summary = backupPasswordSummary(password)
+                false
             }
         }
         findPreference<EditTextPreference>(PreferKey.webDavDir)?.let {
@@ -218,6 +232,13 @@ class BackupConfigFragment : PreferenceFragment(),
         }
     }
 
+    private fun backupPasswordSummary(password: String?): String =
+        if (password.isNullOrBlank()) {
+            getString(R.string.backup_password_unset)
+        } else {
+            "*".repeat(password.length.coerceIn(1, 12))
+        }
+
     private fun upPreferenceSummary(preferenceKey: String, value: String?) {
         val preference = findPreference<Preference>(preferenceKey) ?: return
         when (preferenceKey) {
@@ -266,7 +287,7 @@ class BackupConfigFragment : PreferenceFragment(),
             "backup_selector" -> showBackupSelector()
             "book_cache_selector" -> showBookCacheSelector()
             "web_dav_backup" -> backup()
-            "web_dav_restore" -> chooseRestorePolicy { restore() }
+            "web_dav_restore" -> restore()
             "import_old" -> restoreOld.launch()
             "viewBackupInfo" -> showBackupInfo()
             "viewRestoreInfo" -> showRestoreInfo()
@@ -449,11 +470,11 @@ class BackupConfigFragment : PreferenceFragment(),
             AppWebDav.downloadAndUnzipBackup(name)
         }.onSuccess {
             if (AppConfig.restoreShowSelector) {
-                showRestoreSelectorFromPath(Backup.backupPath, restorePolicy)
+                showRestoreSelectorFromPath(Backup.backupPath, currentRestorePolicy())
             } else {
                 waitDialog.setText(getString(R.string.fvd_restoring))
                 val restoreTask = Coroutine.async {
-                    Restore.restoreLocked(Backup.backupPath, restorePolicy) { itemName ->
+                    Restore.restoreLocked(Backup.backupPath, currentRestorePolicy()) { itemName ->
                         updateWaitDialog(getString(R.string.restore), itemName)
                     }
                 }.onFinally {
@@ -474,41 +495,15 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     private fun restoreFromLocal() {
-        chooseRestorePolicy {
-            restoreDoc.launch {
-                title = getString(R.string.select_restore_file)
-                mode = HandleFileContract.FILE
-                allowExtensions = arrayOf("zip")
-            }
+        restoreDoc.launch {
+            title = getString(R.string.select_restore_file)
+            mode = HandleFileContract.FILE
+            allowExtensions = arrayOf("zip")
         }
     }
 
-    /**
-     * 选择恢复策略：默认合并（只补不删）；覆盖需要二次确认。
-     */
-    private fun chooseRestorePolicy(onReady: () -> Unit) {
-        val policyItems = arrayOf(
-            getString(R.string.restore_policy_merge),
-            getString(R.string.restore_policy_replace),
-        )
-        alert {
-            setTitle(R.string.restore_policy_title)
-            items(policyItems.toList()) { _, index ->
-                if (index == 0) {
-                    restorePolicy = RestorePolicy.Merge
-                    onReady()
-                } else {
-                    alert(R.string.restore_policy_title, R.string.restore_policy_replace_confirm) {
-                        okButton {
-                            restorePolicy = RestorePolicy.Replace
-                            onReady()
-                        }
-                        cancelButton()
-                    }
-                }
-            }
-        }
-    }
+    private fun currentRestorePolicy(): RestorePolicy =
+        RestorePolicy.fromKey(AppConfig.restorePolicyKey)
 
     /**
      * 显示恢复文件选择对话框
@@ -532,7 +527,7 @@ class BackupConfigFragment : PreferenceFragment(),
                     }
                 }
 
-                showRestoreSelectorFromPath(tempPath, restorePolicy)
+                showRestoreSelectorFromPath(tempPath, currentRestorePolicy())
             } catch (e: Exception) {
                 waitDialog.dismiss()
                 AppLog.put("读取备份文件出错\n${e.localizedMessage}", e)
@@ -546,7 +541,7 @@ class BackupConfigFragment : PreferenceFragment(),
      */
     private fun showRestoreSelectorFromPath(
         tempPath: String,
-        policy: RestorePolicy = restorePolicy,
+        policy: RestorePolicy = currentRestorePolicy(),
     ) {
         // 选择器自身有独立的进度弹窗，这里必须收起等待框，
         // 否则用户取消选择器后「读取备份文件…」会一直留在屏幕上

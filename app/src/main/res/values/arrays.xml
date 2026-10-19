@@ -283,4 +283,12 @@
         <item>10</item>
         <item>30</item>
     </string-array>
+    <string-array name="restore_policy_entries">
+        <item>Merge (keep local-only data)</item>
+        <item>Overwrite (remove local-only data)</item>
+    </string-array>
+    <string-array name="restore_policy_values">
+        <item>merge</item>
+        <item>replace</item>
+    </string-array>
 </resources>

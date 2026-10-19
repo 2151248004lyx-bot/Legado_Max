@@ -1508,7 +1508,7 @@
     <string name="set_local_password">设置本地密码</string>
     <string name="set_local_password_summary">本地密码用来对备份的敏感信息加密和解密,如需在不同设备之间同步,本地密码需一致.</string>
     <string name="only_latest_backup_t">仅保留最新备份</string>
-    <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
+    <string name="only_latest_backup_s">本地只保留一份最新备份（固定文件名覆盖）；云端份数由“保留最近备份数”控制</string>
     <string name="backup_selector">备份选择器</string>
     <string name="backup_selector_summary">分别选择本地与 WebDAV 云备份的内容</string>
     <string name="backup_scope_local">本地备份</string>
@@ -2685,14 +2685,14 @@
     <!--Backup restore-->
     <string name="pre_restore_snapshot_t">恢复前快照</string>
     <string name="pre_restore_snapshot_s">恢复前自动备份数据库与章节目录，保留 3 份</string>
-    <string name="backup_all_chapters_t">备份全部章节目录</string>
-    <string name="backup_all_chapters_s">关闭：只备份有缓存章节的书；开启：全部书籍</string>
+    <string name="restore_policy_t">恢复方式</string>
+    <string name="restore_policy_s">合并只补不删；覆盖会删除本地有、备份没有的数据</string>
+    <string name="backup_password_t">备份密码</string>
+    <string name="backup_password_s">用于加密上传到 WebDAV 的备份包与敏感配置，留空则加密不生效</string>
+    <string name="backup_password_unset">未设置</string>
+    <string name="backup_keep_count_s">云端与本地每台设备保留的份数</string>
     <string name="backup_encrypt_t">加密备份包</string>
-    <string name="backup_encrypt_s">使用备份密码进行 AES-GCM 加密，需先设置备份密码</string>
+    <string name="backup_encrypt_s">仅对上传到 WebDAV 的备份包使用 AES-GCM 加密，需先设置备份密码</string>
     <string name="backup_keep_count_t">保留最近备份数</string>
-    <string name="restore_policy_title">恢复方式</string>
-    <string name="restore_policy_merge">合并（保留本地独有数据）</string>
-    <string name="restore_policy_replace">覆盖（删除本地独有数据）</string>
-    <string name="restore_policy_replace_confirm">覆盖会删除本地有、备份没有的数据，确定继续？</string>
     <string name="fvd_manifest_summary">%1$s · %2$s · %3$d 项</string>
 </resources>

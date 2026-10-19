@@ -41,4 +41,12 @@
         <item>10</item>
         <item>30</item>
     </string-array>
+    <string-array name="restore_policy_entries">
+        <item>合併（保留本機獨有資料）</item>
+        <item>覆寫（刪除本機獨有資料）</item>
+    </string-array>
+    <string-array name="restore_policy_values">
+        <item>merge</item>
+        <item>replace</item>
+    </string-array>
 </resources>
