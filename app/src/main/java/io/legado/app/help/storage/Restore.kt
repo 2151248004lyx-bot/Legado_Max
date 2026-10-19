@@ -279,8 +279,8 @@ object Restore {
             AppLog.put("恢复前停止缓存任务失败\n${it.localizedMessage}", it)
         }
 
-        // 覆盖模式下先留一份现有章节，供"包内无目录"的书籍回填
-        val chapterSnapshot = if (policy == RestorePolicy.Replace) snapshotChapters() else null
+        // 先留一份现有章节：包内没有目录的书（或意外被级联删除的目录）恢复后回填
+        val chapterSnapshot = snapshotChapters()
 
         // 数据库整体单事务：任何一步抛异常都会回滚，不留半恢复状态
         try {
@@ -295,10 +295,8 @@ object Restore {
         // 文件与偏好配置：数据库成功后执行，单项失败只记日志
         restoreConfigAndFiles(plan, onProgress)
 
-        // 覆盖模式下的章节回填：包内没有目录的书继续用恢复前的目录
-        if (chapterSnapshot != null) {
-            refillChapters(plan, chapterSnapshot)
-        }
+        // 章节回填：包内没有目录的书继续用恢复前的目录
+        refillChapters(plan, chapterSnapshot)
 
         progress("applyRestoreConfig")
         ReadBookConfig.apply {
@@ -351,7 +349,7 @@ object Restore {
                 }
                 val ignoreLocalBook = BackupConfig.ignoreLocalBook
                 val importBooks = books.filterNot { ignoreLocalBook && it.isLocal }
-                appDb.bookDao.insert(*importBooks.toTypedArray())
+                upsertBooks(importBooks)
             }
         }
 
@@ -758,6 +756,24 @@ object Restore {
         if (plan.hasAny(bookCacheFolderName, bookCacheIndexFileName, bookCacheBooksFileName, "bookChapterCache.json")) {
             progress(bookCacheFolderName)
             restoreBookCache(plan.dir.path)
+        }
+    }
+
+    /**
+     * 逐条 upsert 书籍。
+     *
+     * 不能用 `BookDao.insert`（ON CONFLICT REPLACE）：SQLite 的 REPLACE 会先删除旧行，
+     * 触发 `BookChapter` 的 ON DELETE CASCADE，把章节目录一起删掉。
+     */
+    private fun upsertBooks(books: List<Book>) {
+        if (books.isEmpty()) return
+        val existing = appDb.bookDao.all.associateBy { it.bookUrl }
+        books.forEach { book ->
+            if (existing.containsKey(book.bookUrl)) {
+                appDb.bookDao.update(book)
+            } else {
+                appDb.bookDao.insert(book)
+            }
         }
     }
 

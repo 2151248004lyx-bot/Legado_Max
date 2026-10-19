@@ -1215,7 +1215,10 @@ object Backup {
                 val name = "pre_restore-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
                     .format(Date(System.currentTimeMillis()))}.zip"
                 val target = File(snapshotDir, name)
-                if (ZipUtils.zipFiles(listOf(stagingPath), target.absolutePath)) {
+                // 打包 staging 的直接子项，保证文件位于包根目录（否则解压后多一层目录）
+                val paths = staging.listFiles()?.mapTo(arrayListOf()) { it.absolutePath }
+                    ?: arrayListOf()
+                if (ZipUtils.zipFiles(paths, target.absolutePath)) {
                     pruneSnapshots(snapshotDir)
                     LogUtils.d(TAG, "恢复前快照已生成: ${target.absolutePath}")
                     result = target

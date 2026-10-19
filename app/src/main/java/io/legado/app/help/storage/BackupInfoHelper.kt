@@ -392,8 +392,9 @@ object BackupInfoHelper {
     fun scanRestoreDirectory(path: String): List<BackupFileInfo> {
         return File(path).listFiles()
             ?.filter { entry ->
-                entry.isFile && (entry.name.endsWith(".json") || entry.name.endsWith(".xml"))
-                        || entry.isDirectory
+                entry.name != BackupManifest.FILE_NAME &&
+                    (entry.isFile && (entry.name.endsWith(".json") || entry.name.endsWith(".xml"))
+                        || entry.isDirectory)
             }
             ?.map { entry ->
                 val size = if (entry.isDirectory) {
