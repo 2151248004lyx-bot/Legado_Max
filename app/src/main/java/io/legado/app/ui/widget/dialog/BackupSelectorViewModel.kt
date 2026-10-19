@@ -180,7 +180,6 @@ class BackupSelectorViewModel(application: Application) : BaseViewModel(applicat
             // BackupSelectorConfig 中 fileName 与 BackupInfoHelper 使用的常量不一致的条目。
             "readShareConfig" -> ReadBookConfig.shareConfigFileName
             "directLinkRule" -> DirectLinkUpload.ruleFileName
-            "bookChapter" -> "bookChapterCache.json"
             else -> fileName
         }
     }

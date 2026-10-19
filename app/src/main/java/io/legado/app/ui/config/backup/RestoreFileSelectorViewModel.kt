@@ -6,7 +6,9 @@ import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.help.storage.BackupFileValidator
 import io.legado.app.help.storage.BackupInfoHelper
+import io.legado.app.help.storage.BackupManifest
 import io.legado.app.help.storage.Restore
+import io.legado.app.help.storage.RestorePolicy
 import io.legado.app.help.storage.ValidationResult
 import io.legado.app.help.storage.ValidationState
 import io.legado.app.ui.widget.components.dialog.MultiSelectItem
@@ -20,6 +22,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 恢复文件选择器的 UI 状态。
@@ -32,7 +38,9 @@ data class RestoreFileSelectorUiState(
     val isRestoring: Boolean = false,
     val restoreProgress: String = "",
     val restoreError: String? = null,
-    val restoreComplete: Boolean = false
+    val restoreComplete: Boolean = false,
+    val policy: RestorePolicy = RestorePolicy.Merge,
+    val manifestSummary: String? = null,
 )
 
 /**
@@ -68,7 +76,7 @@ class RestoreFileSelectorViewModel(application: Application) : BaseViewModel(app
     /**
      * 扫描备份目录，加载文件列表。
      */
-    fun loadFiles(backupPath: String) {
+    fun loadFiles(backupPath: String, policyKey: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             val files = BackupInfoHelper.scanRestoreDirectory(backupPath)
 
@@ -78,11 +86,22 @@ class RestoreFileSelectorViewModel(application: Application) : BaseViewModel(app
                 return@launch
             }
 
+            val policy = RestorePolicy.fromKey(policyKey)
+            val manifest = BackupManifest.read(File(backupPath, BackupManifest.FILE_NAME))
+            val summary = manifest?.let {
+                val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                    .format(Date(it.createdAt))
+                val device = it.deviceName.ifBlank { "-" }
+                context.getString(R.string.fvd_manifest_summary, time, device, it.entries.size)
+            }
+
             _uiState.update {
                 // 默认全选，保持原有行为；弹窗内的勾选状态统一收进 UiState
                 it.copy(
                     files = files,
-                    selectedKeys = files.map { file -> file.fileName }.toSet()
+                    selectedKeys = files.map { file -> file.fileName }.toSet(),
+                    policy = policy,
+                    manifestSummary = summary,
                 )
             }
         }
@@ -206,7 +225,8 @@ class RestoreFileSelectorViewModel(application: Application) : BaseViewModel(app
                 Restore.restoreSelected(
                     context,
                     backupPath,
-                    selectedFiles
+                    selectedFiles,
+                    _uiState.value.policy,
                 ) { itemName ->
                     _uiState.update {
                         it.copy(restoreProgress = itemName)

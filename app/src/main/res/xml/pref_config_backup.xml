@@ -134,6 +134,40 @@
 
         <io.legado.app.lib.prefs.SwitchPreference
             android:defaultValue="true"
+            android:key="preRestoreSnapshot"
+            android:summary="@string/pre_restore_snapshot_s"
+            android:title="@string/pre_restore_snapshot_t"
+            app:allowDividerAbove="false"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="backupAllChapters"
+            android:summary="@string/backup_all_chapters_s"
+            android:title="@string/backup_all_chapters_t"
+            app:allowDividerAbove="false"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="backupEncrypt"
+            android:summary="@string/backup_encrypt_s"
+            android:title="@string/backup_encrypt_t"
+            app:allowDividerAbove="false"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.NameListPreference
+            android:defaultValue="5"
+            android:key="backupKeepCount"
+            android:title="@string/backup_keep_count_t"
+            app:entries="@array/backup_keep_count_entries"
+            app:entryValues="@array/backup_keep_count_values"
+            app:allowDividerAbove="false"
+            app:allowDividerBelow="false"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
             android:key="autoCheckNewBackup"
             android:summary="@string/auto_check_new_backup_s"
             android:title="@string/auto_check_new_backup_t"

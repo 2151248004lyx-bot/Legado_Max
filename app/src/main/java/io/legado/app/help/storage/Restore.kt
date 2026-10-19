@@ -43,6 +43,10 @@ import io.legado.app.ui.book.read.websearch.SearchEngineHelper
 import io.legado.app.data.entities.Server
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.AppCacheManager
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.exoplayer.ExoPlayerHelper
+import io.legado.app.model.CacheBook
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LauncherIconHelp
@@ -141,36 +145,53 @@ object Restore {
     )
 
     /**
-     * 从URI恢复备份
-     * 支持SAF（Storage Access Framework）和普通文件路径
+     * 从URI恢复备份。
      *
-     * @param context Android Context
-     * @param uri 备份文件URI
+     * 支持 SAF 与普通文件路径；默认合并策略，只补不删。
+     *
+     * @param policy 冲突策略，默认 [RestorePolicy.Merge]
      */
     suspend fun restore(
         context: Context,
         uri: Uri,
+        policy: RestorePolicy = RestorePolicy.Merge,
         onProgress: ((String) -> Unit)? = null,
     ) {
-        LogUtils.d(TAG, "开始恢复备份 uri:$uri")
+        LogUtils.d(TAG, "开始恢复备份 uri:$uri policy:${policy.key}")
         kotlin.runCatching {
             onProgress?.invoke(BackupInfoHelper.getDisplayName("unzipBackup"))
             FileUtils.delete(Backup.backupPath)
+            // 先落到临时 zip，便于识别整包加密
+            val sourceFile = File(Backup.zipFilePath)
+            FileUtils.delete(sourceFile.absolutePath)
             if (uri.isContentScheme()) {
-                DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use {
-                    ZipUtils.unZipToPath(it, Backup.backupPath)
+                DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use { input ->
+                    sourceFile.outputStream().use { output -> input.copyTo(output) }
                 }
             } else {
-                ZipUtils.unZipToPath(File(uri.path!!), Backup.backupPath)
+                File(uri.path!!).copyTo(sourceFile, overwrite = true)
+            }
+            val zipFile = if (BackupCrypto.isEncrypted(sourceFile)) {
+                val password = LocalConfig.password
+                    ?: throw NoStackTraceException("备份已加密，请先设置备份密码")
+                File("${Backup.zipFilePath}.dec").also { decrypted ->
+                    BackupCrypto.decrypt(sourceFile, decrypted, password)
+                }
+            } else {
+                sourceFile
+            }
+            try {
+                ZipUtils.unZipToPath(zipFile, Backup.backupPath)
+            } finally {
+                if (zipFile != sourceFile) FileUtils.delete(zipFile.absolutePath)
+                FileUtils.delete(sourceFile.absolutePath)
             }
         }.onFailure {
             AppLog.put("复制解压文件出错\n${it.localizedMessage}", it)
             return
         }
         kotlin.runCatching {
-            restoreLocked(Backup.backupPath, onProgress)
-            LocalConfig.lastBackup = System.currentTimeMillis()
-            LocalConfig.lastRestore = System.currentTimeMillis()
+            restoreLocked(Backup.backupPath, policy, onProgress)
         }.onFailure {
             appCtx.toastOnUi("恢复备份出错\n${it.localizedMessage}")
             AppLog.put("恢复备份出错\n${it.localizedMessage}", it)
@@ -178,40 +199,37 @@ object Restore {
     }
 
     /**
-     * 带锁的恢复方法
-     * 使用互斥锁确保同一时间只有一个恢复操作在执行
+     * 带锁的恢复方法。
      *
      * @param path 备份文件解压后的目录路径
+     * @param policy 冲突策略
      */
     suspend fun restoreLocked(
         path: String,
+        policy: RestorePolicy = RestorePolicy.Merge,
         onProgress: ((String) -> Unit)? = null,
     ) {
         mutex.withLock {
-            restore(path, onProgress)
+            executeRestore(path, null, policy, onProgress)
         }
     }
 
     /**
-     * 选择性恢复方法
-     * 只恢复用户选中的文件
+     * 选择性恢复：只恢复用户勾选的条目。
      *
-     * @param context Android Context
-     * @param path 已解压的备份目录路径
-     * @param selectedFiles 选中的文件名列表
+     * @param selectedFiles 包内勾选的文件名集合（与包实际内容取交集）
      */
     suspend fun restoreSelected(
         context: Context,
         path: String,
         selectedFiles: List<String>,
+        policy: RestorePolicy = RestorePolicy.Merge,
         onProgress: ((String) -> Unit)? = null,
     ) {
-        LogUtils.d(TAG, "开始选择性恢复备份 path:$path, files:${selectedFiles.joinToString()}")
+        LogUtils.d(TAG, "开始选择性恢复 path:$path files:${selectedFiles.joinToString()} policy:${policy.key}")
         mutex.withLock {
             try {
-                restoreSelectedFiles(path, selectedFiles, onProgress)
-                LocalConfig.lastBackup = System.currentTimeMillis()
-                LocalConfig.lastRestore = System.currentTimeMillis()
+                executeRestore(path, selectedFiles.toSet(), policy, onProgress)
             } catch (e: Exception) {
                 appCtx.toastOnUi("恢复备份出错\n${e.localizedMessage}")
                 AppLog.put("选择性恢复备份出错\n${e.localizedMessage}", e)
@@ -220,318 +238,474 @@ object Restore {
     }
 
     /**
-     * 核心选择性恢复逻辑
-     *
-     * @param path 备份文件解压后的目录路径
-     * @param selectedFiles 选中的文件名列表
+     * 统一恢复入口：校验 → 快照 → 数据库单事务 → 配置与文件 → 收尾。
      */
-    private suspend fun restoreSelectedFiles(
+    private suspend fun executeRestore(
         path: String,
-        selectedFiles: List<String>,
+        selected: Set<String>?,
+        policy: RestorePolicy,
         onProgress: ((String) -> Unit)? = null,
     ) {
-        val aes = BackupAES()
-        val selectedSet = selectedFiles.toSet()
+        val plan = RestorePlan.build(File(path), selected, policy)
+        LogUtils.d(TAG, "恢复计划 ${plan.describe()}")
         fun progress(fileName: String) {
             onProgress?.invoke(BackupInfoHelper.getDisplayName(fileName))
         }
 
-        // 恢复书架数据
-        if ("bookshelf.json" in selectedSet) {
+        // P1：按 manifest 校验完整性，损坏的包直接阻断，不做半套恢复
+        plan.manifest?.let { manifest ->
+            val errors = BackupManifest.validate(plan.dir, manifest)
+            if (errors.isNotEmpty()) {
+                AppLog.put("备份文件校验失败：${errors.joinToString("；")}")
+                throw NoStackTraceException(errors.first())
+            }
+        }
+
+        // P0：恢复前自动快照（默认开），失败不阻断恢复
+        if (AppConfig.preRestoreSnapshot) {
+            progress("preRestoreSnapshot")
+            runCatching {
+                Backup.createSnapshot(onProgress)
+            }.onFailure {
+                AppLog.put("生成恢复前快照失败\n${it.localizedMessage}", it)
+            }
+        }
+
+        // 停止缓存任务并释放 media3 目录锁，避免恢复缓存文件时被占用
+        runCatching {
+            CacheBook.close()
+            ExoPlayerHelper.releaseAllBookCaches()
+        }.onFailure {
+            AppLog.put("恢复前停止缓存任务失败\n${it.localizedMessage}", it)
+        }
+
+        // 覆盖模式下先留一份现有章节，供"包内无目录"的书籍回填
+        val chapterSnapshot = if (policy == RestorePolicy.Replace) snapshotChapters() else null
+
+        // 数据库整体单事务：任何一步抛异常都会回滚，不留半恢复状态
+        try {
+            appDb.withTransaction {
+                restoreDatabase(plan, onProgress)
+            }
+        } catch (e: Exception) {
+            AppLog.put("恢复数据库失败，事务已回滚\n${e.localizedMessage}", e)
+            throw e
+        }
+
+        // 文件与偏好配置：数据库成功后执行，单项失败只记日志
+        restoreConfigAndFiles(plan, onProgress)
+
+        // 覆盖模式下的章节回填：包内没有目录的书继续用恢复前的目录
+        if (chapterSnapshot != null) {
+            refillChapters(plan, chapterSnapshot)
+        }
+
+        progress("applyRestoreConfig")
+        ReadBookConfig.apply {
+            comicStyleSelect = appCtx.getPrefInt(PreferKey.comicStyleSelect)
+            readStyleSelect = appCtx.getPrefInt(PreferKey.readStyleSelect)
+            shareLayout = appCtx.getPrefBoolean(PreferKey.shareLayout)
+            hideStatusBar = appCtx.getPrefBoolean(PreferKey.hideStatusBar)
+            hideNavigationBar = appCtx.getPrefBoolean(PreferKey.hideNavigationBar)
+            autoReadSpeed = appCtx.getPrefInt(PreferKey.autoReadSpeed, 46)
+        }
+
+        LocalConfig.lastRestore = System.currentTimeMillis()
+        appCtx.toastOnUi(R.string.restore_success)
+        postEvent(EventBus.BOOKSHELF_REFRESH, "")
+
+        withContext(Main) {
+            delay(100)
+            if (!BuildConfig.DEBUG) {
+                LauncherIconHelp.changeIcon(appCtx.getPrefString(PreferKey.launcherIcon))
+            }
+            ThemeConfig.applyDayNight(appCtx)
+        }
+    }
+
+    /**
+     * 数据库恢复。
+     *
+     * 统一模式：先解析，解析成功后才允许删除；只有显式覆盖策略才 deleteAll。
+     * 任何"包内没有"的条目都不会触碰本地数据。
+     */
+    private suspend fun restoreDatabase(
+        plan: RestorePlan,
+        onProgress: ((String) -> Unit)? = null,
+    ) {
+        val aes = BackupAES()
+        fun progress(fileName: String) {
+            onProgress?.invoke(BackupInfoHelper.getDisplayName(fileName))
+        }
+
+        // 书架
+        if (plan.has("bookshelf.json")) {
             progress("bookshelf.json")
-            appDb.bookDao.deleteAll()
-            fileToListT<Book>(path, "bookshelf.json")?.let {
-                it.forEach { book -> book.upType() }
-                it.filter { book -> book.isLocal }
-                    .forEach { book -> book.coverUrl = LocalBook.getCoverPath(book) }
+            fileToListT<Book>(plan.dir.path, "bookshelf.json")?.let { books ->
+                if (plan.shouldReplace("bookshelf.json")) {
+                    appDb.bookDao.deleteAll()
+                }
+                books.forEach { book -> book.upType() }
+                books.filter { it.isLocal }.forEach { book ->
+                    book.coverUrl = LocalBook.getCoverPath(book)
+                }
                 val ignoreLocalBook = BackupConfig.ignoreLocalBook
-                val books = it.filterNot { book -> ignoreLocalBook && book.isLocal }
-                appDb.bookDao.insert(*books.toTypedArray())
+                val importBooks = books.filterNot { ignoreLocalBook && it.isLocal }
+                appDb.bookDao.insert(*importBooks.toTypedArray())
             }
         }
 
-        // 恢复书签
-        if ("bookmark.json" in selectedSet) {
+        // 章节目录（先于其他表，保证外键与缓存匹配）
+        if (plan.has("bookChapter.json")) {
+            progress("bookChapter.json")
+            restoreBookChapters(plan.dir.path, replace = plan.shouldReplace("bookChapter.json"))
+        }
+
+        // 书签
+        if (plan.has("bookmark.json")) {
             progress("bookmark.json")
-            appDb.bookmarkDao.deleteAll()
-            fileToListT<Bookmark>(path, "bookmark.json")?.let {
-                appDb.bookmarkDao.insert(*it.toTypedArray())
+            fileToListT<Bookmark>(plan.dir.path, "bookmark.json")?.let { list ->
+                if (plan.shouldReplace("bookmark.json")) appDb.bookmarkDao.deleteAll()
+                appDb.bookmarkDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复书籍分组
-        if ("bookGroup.json" in selectedSet) {
+        // 书籍分组
+        if (plan.has("bookGroup.json")) {
             progress("bookGroup.json")
-            appDb.bookGroupDao.deleteAll()
-            fileToListT<BookGroup>(path, "bookGroup.json")?.let {
-                appDb.bookGroupDao.insert(*it.toTypedArray())
+            fileToListT<BookGroup>(plan.dir.path, "bookGroup.json")?.let { list ->
+                if (plan.shouldReplace("bookGroup.json")) appDb.bookGroupDao.deleteAll()
+                appDb.bookGroupDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复书源
-        if ("bookSource.json" in selectedSet) {
+        // 书源（兼容旧版本格式）
+        if (plan.has("bookSource.json")) {
             progress("bookSource.json")
-            appDb.bookSourceDao.deleteAll()
-            fileToListT<BookSource>(path, "bookSource.json")?.let {
-                appDb.bookSourceDao.insert(*it.toTypedArray())
-            } ?: run {
-                val bookSourceFile = File(path, "bookSource.json")
+            val list = fileToListT<BookSource>(plan.dir.path, "bookSource.json")
+            if (list != null) {
+                if (plan.shouldReplace("bookSource.json")) appDb.bookSourceDao.deleteAll()
+                appDb.bookSourceDao.insert(*list.toTypedArray())
+            } else {
+                val bookSourceFile = File(plan.dir, "bookSource.json")
                 if (bookSourceFile.exists()) {
-                    val json = bookSourceFile.readText()
-                    ImportOldData.importOldSource(json)
+                    runCatching { ImportOldData.importOldSource(bookSourceFile.readText()) }
                 }
             }
         }
 
-        // 恢复RSS源
-        if ("rssSources.json" in selectedSet) {
+        // RSS 源
+        if (plan.has("rssSources.json")) {
             progress("rssSources.json")
-            appDb.rssSourceDao.deleteAll()
-            fileToListT<RssSource>(path, "rssSources.json")?.let {
-                appDb.rssSourceDao.insert(*it.toTypedArray())
+            fileToListT<RssSource>(plan.dir.path, "rssSources.json")?.let { list ->
+                if (plan.shouldReplace("rssSources.json")) appDb.rssSourceDao.deleteAll()
+                appDb.rssSourceDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复RSS收藏
-        if ("rssStar.json" in selectedSet) {
+        // RSS 收藏
+        if (plan.has("rssStar.json")) {
             progress("rssStar.json")
-            appDb.rssStarDao.deleteAll()
-            fileToListT<RssStar>(path, "rssStar.json")?.let {
-                appDb.rssStarDao.insert(*it.toTypedArray())
+            fileToListT<RssStar>(plan.dir.path, "rssStar.json")?.let { list ->
+                if (plan.shouldReplace("rssStar.json")) appDb.rssStarDao.deleteAll()
+                appDb.rssStarDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复源订阅链接
-        if ("sourceSub.json" in selectedSet) {
+        // 源订阅
+        if (plan.has("sourceSub.json")) {
             progress("sourceSub.json")
-            appDb.ruleSubDao.deleteAll()
-            fileToListT<RuleSub>(path, "sourceSub.json")?.let {
-                appDb.ruleSubDao.insert(*it.toTypedArray())
+            fileToListT<RuleSub>(plan.dir.path, "sourceSub.json")?.let { list ->
+                if (plan.shouldReplace("sourceSub.json")) appDb.ruleSubDao.deleteAll()
+                appDb.ruleSubDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复搜索引擎规则
-        if ("webSearchEngines.json" in selectedSet) {
+        // 搜索引擎规则（以文件形式存储，直接覆盖）
+        if (plan.has("webSearchEngines.json")) {
             progress("webSearchEngines.json")
-            val enginesFile = File(path, "webSearchEngines.json")
-            if (enginesFile.exists()) {
-                try {
-                    val enginesJson = enginesFile.readText()
-                    val engines = GSON.fromJsonArray<SearchEngine>(enginesJson).getOrNull()
-                    if (engines != null) {
-                        SearchEngineHelper.saveSearchEngines(appCtx, engines)
-                    }
-                } catch (e: Exception) {
-                    AppLog.put("恢复搜索引擎规则出错\n${e.localizedMessage}", e)
+            File(plan.dir, "webSearchEngines.json").takeIf { it.exists() }?.runCatching {
+                GSON.fromJsonArray<SearchEngine>(readText()).getOrNull()?.let { engines ->
+                    SearchEngineHelper.saveSearchEngines(appCtx, engines)
                 }
+            }?.onFailure {
+                AppLog.put("恢复搜索引擎规则出错\n${it.localizedMessage}", it)
             }
         }
 
-        // 恢复首页数据
-        if ("homepage.json" in selectedSet) {
+        // 首页模块
+        if (plan.has("homepage.json")) {
             progress("homepage.json")
-            val file = File(path, "homepage.json")
-            if (file.exists()) {
-                val json = file.readText()
-                val obj = GSON.fromJsonObject<Map<String, JsonElement>>(json).getOrNull()
+            File(plan.dir, "homepage.json").takeIf { it.exists() }?.runCatching {
+                val obj = GSON.fromJsonObject<Map<String, JsonElement>>(readText()).getOrNull()
                 if (obj != null) {
-                    appDb.homepageModuleDao.deleteAll()
-                    (obj["modules"] as? JsonArray)?.let { array ->
-                        val modules = GSON.fromJsonArray<HomepageModule>(array.toString()).getOrNull()
-                        modules?.let { appDb.homepageModuleDao.upsertAll(it) }
+                    if (plan.shouldReplace("homepage.json")) {
+                        appDb.homepageModuleDao.deleteAll()
+                        appDb.homepageCustomSetDao.deleteAll()
                     }
-                    appDb.homepageCustomSetDao.deleteAll()
+                    (obj["modules"] as? JsonArray)?.let { array ->
+                        GSON.fromJsonArray<HomepageModule>(array.toString()).getOrNull()
+                            ?.let { appDb.homepageModuleDao.upsertAll(it) }
+                    }
                     (obj["customSets"] as? JsonArray)?.let { array ->
-                        val sets = GSON.fromJsonArray<HomepageCustomSet>(array.toString()).getOrNull()
-                        sets?.forEach { set -> appDb.homepageCustomSetDao.upsert(set) }
+                        GSON.fromJsonArray<HomepageCustomSet>(array.toString()).getOrNull()
+                            ?.forEach { appDb.homepageCustomSetDao.upsert(it) }
                     }
                 }
+            }?.onFailure {
+                AppLog.put("恢复首页数据出错\n${it.localizedMessage}", it)
             }
         }
 
-        // 恢复替换规则
-        if ("replaceRule.json" in selectedSet) {
+        // 替换规则
+        if (plan.has("replaceRule.json")) {
             progress("replaceRule.json")
-            appDb.replaceRuleDao.deleteAll()
-            fileToListT<ReplaceRule>(path, "replaceRule.json")?.let {
-                appDb.replaceRuleDao.insert(*it.toTypedArray())
+            fileToListT<ReplaceRule>(plan.dir.path, "replaceRule.json")?.let { list ->
+                if (plan.shouldReplace("replaceRule.json")) appDb.replaceRuleDao.deleteAll()
+                appDb.replaceRuleDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复搜索历史
-        if (HighlightRuleStore.backupFileName in selectedSet) {
+        // 高亮规则
+        if (plan.has(HighlightRuleStore.backupFileName)) {
             progress(HighlightRuleStore.backupFileName)
-            File(path, HighlightRuleStore.backupFileName).takeIf { it.exists() }?.runCatching {
+            File(plan.dir, HighlightRuleStore.backupFileName).takeIf { it.exists() }?.runCatching {
                 GSON.fromJsonObject<HighlightRuleStore.BackupData>(readText()).getOrNull()?.let {
-                    HighlightRuleStore.restoreBackupData(appCtx, it, path)
+                    HighlightRuleStore.restoreBackupData(appCtx, it, plan.dir.path)
                 }
             }?.onFailure {
                 AppLog.put("恢复高亮规则出错\n${it.localizedMessage}", it)
             }
         }
-        if ("searchHistory.json" in selectedSet) {
+
+        // 搜索历史
+        if (plan.has("searchHistory.json")) {
             progress("searchHistory.json")
-            appDb.searchKeywordDao.deleteAll()
-            fileToListT<SearchKeyword>(path, "searchHistory.json")?.let {
-                appDb.searchKeywordDao.insert(*it.toTypedArray())
+            fileToListT<SearchKeyword>(plan.dir.path, "searchHistory.json")?.let { list ->
+                if (plan.shouldReplace("searchHistory.json")) appDb.searchKeywordDao.deleteAll()
+                appDb.searchKeywordDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复TXT目录规则
-        if ("txtTocRule.json" in selectedSet) {
+        // TXT 目录规则
+        if (plan.has("txtTocRule.json")) {
             progress("txtTocRule.json")
-            appDb.txtTocRuleDao.deleteAll()
-            fileToListT<TxtTocRule>(path, "txtTocRule.json")?.let {
-                appDb.txtTocRuleDao.insert(*it.toTypedArray())
+            fileToListT<TxtTocRule>(plan.dir.path, "txtTocRule.json")?.let { list ->
+                if (plan.shouldReplace("txtTocRule.json")) appDb.txtTocRuleDao.deleteAll()
+                appDb.txtTocRuleDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复HTTP TTS配置
-        if ("httpTTS.json" in selectedSet) {
+        // HTTP TTS
+        if (plan.has("httpTTS.json")) {
             progress("httpTTS.json")
-            appDb.httpTTSDao.deleteAll()
-            fileToListT<HttpTTS>(path, "httpTTS.json")?.let {
-                appDb.httpTTSDao.insert(*it.toTypedArray())
+            fileToListT<HttpTTS>(plan.dir.path, "httpTTS.json")?.let { list ->
+                if (plan.shouldReplace("httpTTS.json")) appDb.httpTTSDao.deleteAll()
+                appDb.httpTTSDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复词典规则
-        if ("dictRule.json" in selectedSet) {
+        // 词典规则
+        if (plan.has("dictRule.json")) {
             progress("dictRule.json")
-            appDb.dictRuleDao.deleteAll()
-            fileToListT<DictRule>(path, "dictRule.json")?.let {
-                appDb.dictRuleDao.insert(*it.toTypedArray())
+            fileToListT<DictRule>(plan.dir.path, "dictRule.json")?.let { list ->
+                if (plan.shouldReplace("dictRule.json")) appDb.dictRuleDao.deleteAll()
+                appDb.dictRuleDao.insert(*list.toTypedArray())
             }
         }
 
-        // 恢复键盘辅助
-        if ("keyboardAssists.json" in selectedSet) {
+        // 键盘辅助
+        if (plan.has("keyboardAssists.json")) {
             progress("keyboardAssists.json")
-            appDb.keyboardAssistsDao.deleteAll()
-            fileToListT<KeyboardAssist>(path, "keyboardAssists.json")?.let {
-                appDb.keyboardAssistsDao.insert(*it.toTypedArray())
+            fileToListT<KeyboardAssist>(plan.dir.path, "keyboardAssists.json")?.let { list ->
+                if (plan.shouldReplace("keyboardAssists.json")) appDb.keyboardAssistsDao.deleteAll()
+                appDb.keyboardAssistsDao.insert(*list.toTypedArray())
             }
         }
 
-        if (CoverGalleryRepository.backupDirName in selectedSet) {
+        // 封面图集
+        if (plan.has(CoverGalleryRepository.backupDirName)) {
             progress(CoverGalleryRepository.backupDirName)
-            restoreCoverGallery(path)
+            restoreCoverGallery(plan.dir.path, replace = plan.shouldReplace(CoverGalleryRepository.backupDirName))
         }
 
-        // 恢复阅读记录
-        if ("readRecord.json" in selectedSet || "readRecordDetail.json" in selectedSet || "readRecordSession.json" in selectedSet) {
+        // 阅读记录：合并时直接导入（主键 REPLACE），覆盖时先清空
+        if (plan.hasAny("readRecord.json", "readRecordDetail.json", "readRecordSession.json")) {
             progress("readRecord.json")
-            val readRecords = if ("readRecord.json" in selectedSet) fileToListT<ReadRecord>(path, "readRecord.json").orEmpty() else emptyList()
-            val readRecordDetails = if ("readRecordDetail.json" in selectedSet) fileToListT<ReadRecordDetail>(path, "readRecordDetail.json").orEmpty() else emptyList()
-            val readRecordSessions = if ("readRecordSession.json" in selectedSet) fileToListT<ReadRecordSession>(path, "readRecordSession.json").orEmpty() else emptyList()
+            val readRecords = if (plan.has("readRecord.json")) {
+                fileToListT<ReadRecord>(plan.dir.path, "readRecord.json").orEmpty()
+            } else {
+                emptyList()
+            }
+            val readRecordDetails = if (plan.has("readRecordDetail.json")) {
+                fileToListT<ReadRecordDetail>(plan.dir.path, "readRecordDetail.json").orEmpty()
+            } else {
+                emptyList()
+            }
+            val readRecordSessions = if (plan.has("readRecordSession.json")) {
+                fileToListT<ReadRecordSession>(plan.dir.path, "readRecordSession.json").orEmpty()
+            } else {
+                emptyList()
+            }
             if (readRecords.isNotEmpty() || readRecordDetails.isNotEmpty() || readRecordSessions.isNotEmpty()) {
-                // 预加载书名→作者映射，避免 repairRecords 中逐条查询 bookDao
                 val bookAuthorMap = appDb.bookDao.all
                     .mapNotNull { book -> book.author.trim().ifBlank { null }?.let { book.name to it } }
                     .toMap()
-                // 整个清空+导入+修复在一个事务中执行，避免 N 次事务提交开销
+                val replaceRecords = plan.policy == RestorePolicy.Replace &&
+                    plan.hasAny("readRecord.json", "readRecordDetail.json", "readRecordSession.json")
                 appDb.withTransaction {
-                    appDb.readRecordDao.clear()
-                    appDb.readRecordDao.clearDetails()
-                    appDb.readRecordDao.clearSessions()
+                    if (replaceRecords) {
+                        appDb.readRecordDao.clear()
+                        appDb.readRecordDao.clearDetails()
+                        appDb.readRecordDao.clearSessions()
+                    }
                     ReadRecordRepository(appDb.readRecordDao).apply {
                         importRecords(readRecords, readRecordDetails, readRecordSessions)
                         repairRecords { bookName -> bookAuthorMap[bookName] }
                     }
                 }
-                appCtx.putPrefInt(PreferKey.readRecordRepairVersion, ReadRecordRepository.CURRENT_REPAIR_VERSION)
+                appCtx.putPrefInt(
+                    PreferKey.readRecordRepairVersion,
+                    ReadRecordRepository.CURRENT_REPAIR_VERSION,
+                )
             }
         }
 
-        // 恢复服务器配置
-        if ("servers.json" in selectedSet) {
+        // 服务器配置（需要解密）
+        if (plan.has("servers.json")) {
             progress("servers.json")
-            appDb.serverDao.deleteAll()
-            File(path, "servers.json").takeIf { it.exists() }?.runCatching {
+            File(plan.dir, "servers.json").takeIf { it.exists() }?.runCatching {
                 var json = readText()
                 if (!json.isJsonArray()) {
                     json = aes.decryptStr(json)
                 }
-                GSON.fromJsonArray<Server>(json).getOrNull()?.let { appDb.serverDao.insert(*it.toTypedArray()) }
-            }?.onFailure { AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it) }
+                GSON.fromJsonArray<Server>(json).getOrNull()?.let { list ->
+                    if (plan.shouldReplace("servers.json")) appDb.serverDao.deleteAll()
+                    appDb.serverDao.insert(*list.toTypedArray())
+                }
+            }?.onFailure {
+                AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it)
+            }
         }
 
-        // 恢复直链上传配置
-        if (DirectLinkUpload.ruleFileName in selectedSet) {
+        // 直链上传配置
+        if (plan.has(DirectLinkUpload.ruleFileName)) {
             progress(DirectLinkUpload.ruleFileName)
-            File(path, DirectLinkUpload.ruleFileName).takeIf { it.exists() }?.runCatching {
-                val json = readText()
-                ACache.get(cacheDir = false).put(DirectLinkUpload.ruleFileName, json)
-            }?.onFailure { AppLog.put("恢复直链上传出错\n${it.localizedMessage}", it) }
+            File(plan.dir, DirectLinkUpload.ruleFileName).takeIf { it.exists() }?.runCatching {
+                if (plan.shouldReplace(DirectLinkUpload.ruleFileName)) {
+                    DirectLinkUpload.delConfig()
+                }
+                ACache.get(cacheDir = false).put(DirectLinkUpload.ruleFileName, readText())
+            }?.onFailure {
+                AppLog.put("恢复直链上传出错\n${it.localizedMessage}", it)
+            }
         }
 
-        // 恢复主题配置
-        if (ThemeConfig.configFileName in selectedSet) {
+        // 主题配置
+        if (plan.has(ThemeConfig.configFileName)) {
             progress(ThemeConfig.configFileName)
-            File(path, ThemeConfig.configFileName).takeIf { it.exists() }?.runCatching {
+            File(plan.dir, ThemeConfig.configFileName).takeIf { it.exists() }?.runCatching {
                 val configs = GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrNull()
-                FileUtils.delete(ThemeConfig.configFilePath)
-                copyTo(File(ThemeConfig.configFilePath))
-                ThemeConfig.replaceConfigs(configs)
-            }?.onFailure { AppLog.put("恢复主题出错\n${it.localizedMessage}", it) }
+                if (configs != null) {
+                    FileUtils.delete(ThemeConfig.configFilePath)
+                    copyTo(File(ThemeConfig.configFilePath))
+                    ThemeConfig.replaceConfigs(configs)
+                }
+            }?.onFailure {
+                AppLog.put("恢复主题出错\n${it.localizedMessage}", it)
+            }
         }
 
-        // 恢复封面规则配置
-        if (BookCover.configFileName in selectedSet) {
+        // 封面规则
+        if (plan.has(BookCover.configFileName)) {
             progress(BookCover.configFileName)
-            File(path, BookCover.configFileName).takeIf { it.exists() }?.runCatching {
-                val json = readText()
-                BookCover.saveCoverRule(json)
-                // 清除封面缓存，确保使用新配置生成封面
+            File(plan.dir, BookCover.configFileName).takeIf { it.exists() }?.runCatching {
+                if (plan.shouldReplace(BookCover.configFileName)) {
+                    BookCover.delCoverRule()
+                }
+                BookCover.saveCoverRule(readText())
                 CoverImageView.clearAllCache()
-            }?.onFailure { AppLog.put("恢复封面规则出错\n${it.localizedMessage}", it) }
+            }?.onFailure {
+                AppLog.put("恢复封面规则出错\n${it.localizedMessage}", it)
+            }
         }
 
-        // 恢复阅读界面配置
-        if (!BackupConfig.ignoreReadConfig && (ReadBookConfig.configFileName in selectedSet || ReadBookConfig.shareConfigFileName in selectedSet)) {
+        // 运行时书源缓存
+        if (plan.has(runtimeSourceCacheFileName)) {
+            progress(runtimeSourceCacheFileName)
+            restoreRuntimeSourceCaches(plan.dir.path, replace = plan.shouldReplace(runtimeSourceCacheFileName))
+        }
+    }
+
+    /**
+     * 恢复配置与文件（数据库事务之外）。
+     */
+    private suspend fun restoreConfigAndFiles(
+        plan: RestorePlan,
+        onProgress: ((String) -> Unit)? = null,
+    ) {
+        val aes = BackupAES()
+        fun progress(fileName: String) {
+            onProgress?.invoke(BackupInfoHelper.getDisplayName(fileName))
+        }
+
+        // 阅读界面配置与背景图
+        if (!BackupConfig.ignoreReadConfig &&
+            plan.hasAny(ReadBookConfig.configFileName, ReadBookConfig.shareConfigFileName)
+        ) {
             progress("backgroundImages")
-            restoreReadConfigBackgrounds(path)
-            if (ReadBookConfig.configFileName in selectedSet) {
+            restoreReadConfigBackgrounds(
+                plan.dir.path,
+                clearExisting = plan.shouldReplace(ReadBookConfig.configFileName) ||
+                    plan.shouldReplace(ReadBookConfig.shareConfigFileName),
+            )
+            if (plan.has(ReadBookConfig.configFileName)) {
                 progress(ReadBookConfig.configFileName)
-                File(path, ReadBookConfig.configFileName).takeIf { it.exists() }?.runCatching {
+                File(plan.dir, ReadBookConfig.configFileName).takeIf { it.exists() }?.runCatching {
                     FileUtils.delete(ReadBookConfig.configFilePath)
                     copyTo(File(ReadBookConfig.configFilePath))
                     ReadBookConfig.initConfigs()
-                }?.onFailure { AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it) }
+                }?.onFailure {
+                    AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it)
+                }
             }
-            if (ReadBookConfig.shareConfigFileName in selectedSet) {
+            if (plan.has(ReadBookConfig.shareConfigFileName)) {
                 progress(ReadBookConfig.shareConfigFileName)
-                File(path, ReadBookConfig.shareConfigFileName).takeIf { it.exists() }?.runCatching {
+                File(plan.dir, ReadBookConfig.shareConfigFileName).takeIf { it.exists() }?.runCatching {
                     FileUtils.delete(ReadBookConfig.shareConfigFilePath)
                     copyTo(File(ReadBookConfig.shareConfigFilePath))
                     ReadBookConfig.initShareConfig()
-                }?.onFailure { AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it) }
+                }?.onFailure {
+                    AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it)
+                }
             }
         }
 
-        // 恢复主题背景图片
         fixReadConfigBackgroundPaths()
 
-        // 恢复SharedPreferences配置
-        if ("config.xml" in selectedSet) {
+        // 应用主配置
+        if (plan.has("config.xml")) {
             progress("config.xml")
-            // 旧备份没有 highlightRule.json，需要允许 config.xml 恢复高亮规则键
-            val allowHighlightKeys = !File(path, HighlightRuleStore.backupFileName).exists()
-            readBackupPrefs(path, "config")?.let { map ->
-                clearThemeRestorePrefs()
+            val allowHighlightKeys = !File(plan.dir, HighlightRuleStore.backupFileName).exists()
+            readBackupPrefs(plan.dir.path, "config")?.let { map ->
+                val replacePrefs = plan.shouldReplace("config.xml")
+                if (replacePrefs) {
+                    clearThemeRestorePrefs()
+                }
                 val edit = appCtx.defaultSharedPreferences.edit()
                 map.forEach { (key, value) ->
                     if (BackupConfig.keyIsNotIgnore(key, allowHighlightKeys) || key in themeRestorePrefKeys) {
                         when (key) {
                             PreferKey.webDavPassword -> {
-                                kotlin.runCatching { aes.decryptStr(value.toString()) }.getOrNull()?.let {
+                                runCatching { aes.decryptStr(value.toString()) }.getOrNull()?.let {
                                     edit.putString(key, it)
-                                } ?: let {
+                                } ?: run {
                                     if (appCtx.getPrefString(PreferKey.webDavPassword).isNullOrBlank()) {
                                         edit.putString(key, value.toString())
                                     }
                                 }
                             }
+
                             else -> when (value) {
                                 is Int -> edit.putInt(key, value)
                                 is Boolean -> edit.putBoolean(key, value)
@@ -544,473 +718,90 @@ object Restore {
                 }
                 edit.apply()
             }
-            // 如果从 config.xml 恢复了高亮规则，清除缓存以强制重新加载
             if (allowHighlightKeys) {
                 HighlightRuleStore.clearCache()
             }
         }
 
-        // 修正主题背景图片路径
+        // 主题背景
         progress("themeBackgroundImages")
         restoreThemeBackgrounds(
-            backupPath = path,
-            clearExisting = "config.xml" in selectedSet || ThemeConfig.configFileName in selectedSet,
+            plan.dir.path,
+            clearExisting = plan.shouldReplace("config.xml") ||
+                plan.shouldReplace(ThemeConfig.configFileName),
         )
         fixThemeBackgroundPaths()
         fixThemeConfigBackgroundPaths()
 
-        // 恢复视频播放配置
-        if ("videoConfig.xml" in selectedSet) {
+        // 视频播放配置
+        if (plan.has("videoConfig.xml")) {
             progress("videoConfig.xml")
-            readBackupPrefs(path, "videoConfig")?.let { map ->
-                appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit().apply {
-                    clear()
-                    map.forEach { (key, value) ->
-                        when (value) {
-                            is Int -> putInt(key, value)
-                            is Boolean -> putBoolean(key, value)
-                            is Long -> putLong(key, value)
-                            is Float -> putFloat(key, value)
-                            is String -> putString(key, value)
-                        }
-                    }
-                    apply()
+            readBackupPrefs(plan.dir.path, "videoConfig")?.let { map ->
+                val edit = appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit()
+                if (plan.shouldReplace("videoConfig.xml")) {
+                    edit.clear()
                 }
+                map.forEach { (key, value) ->
+                    when (value) {
+                        is Int -> edit.putInt(key, value)
+                        is Boolean -> edit.putBoolean(key, value)
+                        is Long -> edit.putLong(key, value)
+                        is Float -> edit.putFloat(key, value)
+                        is String -> edit.putString(key, value)
+                    }
+                }
+                edit.apply()
             }
         }
 
-        // 应用阅读配置
-        if (runtimeSourceCacheFileName in selectedSet) {
-            progress(runtimeSourceCacheFileName)
-            restoreRuntimeSourceCaches(path)
-        }
-
-        // 恢复书籍缓存和章节目录
-        LogUtils.d(TAG, "检查是否需要恢复书籍缓存")
-        LogUtils.d(TAG, "selectedSet 内容: ${selectedSet.joinToString(", ")}")
-        LogUtils.d(TAG, "bookCacheFolderName: $bookCacheFolderName, 是否在 selectedSet: ${bookCacheFolderName in selectedSet}")
-        LogUtils.d(TAG, "bookCacheIndexFileName: $bookCacheIndexFileName, 是否在 selectedSet: ${bookCacheIndexFileName in selectedSet}")
-        LogUtils.d(TAG, "bookCacheBooksFileName: $bookCacheBooksFileName, 是否在 selectedSet: ${bookCacheBooksFileName in selectedSet}")
-        LogUtils.d(TAG, "bookChapterCache.json: bookChapterCache.json, 是否在 selectedSet: ${"bookChapterCache.json" in selectedSet}")
-
-        if (
-            bookCacheFolderName in selectedSet ||
-            bookCacheIndexFileName in selectedSet ||
-            bookCacheBooksFileName in selectedSet ||
-            "bookChapterCache.json" in selectedSet
-        ) {
-            LogUtils.d(TAG, "满足书籍缓存恢复条件，开始恢复")
+        // 书籍缓存与章节目录
+        if (plan.hasAny(bookCacheFolderName, bookCacheIndexFileName, bookCacheBooksFileName, "bookChapterCache.json")) {
             progress(bookCacheFolderName)
-            restoreBookCache(path)
-        } else {
-            LogUtils.d(TAG, "不满足书籍缓存恢复条件，跳过")
-        }
-
-        progress("applyRestoreConfig")
-        ReadBookConfig.apply {
-            comicStyleSelect = appCtx.getPrefInt(PreferKey.comicStyleSelect)
-            readStyleSelect = appCtx.getPrefInt(PreferKey.readStyleSelect)
-            shareLayout = appCtx.getPrefBoolean(PreferKey.shareLayout)
-            hideStatusBar = appCtx.getPrefBoolean(PreferKey.hideStatusBar)
-            hideNavigationBar = appCtx.getPrefBoolean(PreferKey.hideNavigationBar)
-            autoReadSpeed = appCtx.getPrefInt(PreferKey.autoReadSpeed, 46)
-        }
-
-        appCtx.toastOnUi(R.string.restore_success)
-
-        // 应用主题和图标变更
-        withContext(Main) {
-            delay(100)
-            if (!BuildConfig.DEBUG) {
-                LauncherIconHelp.changeIcon(appCtx.getPrefString(PreferKey.launcherIcon))
-            }
-            ThemeConfig.applyDayNight(appCtx)
+            restoreBookCache(plan.dir.path)
         }
     }
 
     /**
-     * 核心恢复逻辑
-     *
-     * 执行步骤：
-     * 1. 恢复数据库数据（书籍、书签、书源等）
-     * 2. 恢复自定义配置文件（主题、阅读样式等）
-     * 3. 恢复SharedPreferences配置
-     * 4. 应用配置变更
-     *
-     * @param path 备份文件解压后的目录路径
+     * 恢复 bookChapter.json（只包含有缓存目录的书籍）。
      */
-    private suspend fun restore(
-        path: String,
-        onProgress: ((String) -> Unit)? = null,
-    ) {
-        val aes = BackupAES()
-        fun progress(fileName: String) {
-            onProgress?.invoke(BackupInfoHelper.getDisplayName(fileName))
-        }
-
-        // 恢复书架数据
-        progress("bookshelf.json")
-        appDb.bookDao.deleteAll()
-        fileToListT<Book>(path, "bookshelf.json")?.let {
-            it.forEach { book ->
-                book.upType()
+    private fun restoreBookChapters(path: String, replace: Boolean) {
+        val chapters = fileToListT<BookChapter>(path, "bookChapter.json").orEmpty()
+        if (chapters.isEmpty()) return
+        chapters.groupBy { it.bookUrl }.forEach { (bookUrl, list) ->
+            if (appDb.bookDao.getBook(bookUrl) == null) {
+                LogUtils.d(TAG, "章节目录跳过不存在的书籍: $bookUrl")
+                return@forEach
             }
-            it.filter { book -> book.isLocal }
-                .forEach { book ->
-                    book.coverUrl = LocalBook.getCoverPath(book)
-                }
-            val ignoreLocalBook = BackupConfig.ignoreLocalBook
-            val books = it.filterNot { book -> ignoreLocalBook && book.isLocal }
-            appDb.bookDao.insert(*books.toTypedArray())
-        }
-
-        // 恢复书签
-        progress("bookmark.json")
-        appDb.bookmarkDao.deleteAll()
-        fileToListT<Bookmark>(path, "bookmark.json")?.let {
-            appDb.bookmarkDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复书籍分组
-        progress("bookGroup.json")
-        appDb.bookGroupDao.deleteAll()
-        fileToListT<BookGroup>(path, "bookGroup.json")?.let {
-            appDb.bookGroupDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复书源（兼容旧版本格式）
-        progress("bookSource.json")
-        appDb.bookSourceDao.deleteAll()
-        fileToListT<BookSource>(path, "bookSource.json")?.let {
-            appDb.bookSourceDao.insert(*it.toTypedArray())
-        } ?: run {
-            val bookSourceFile = File(path, "bookSource.json")
-            if (bookSourceFile.exists()) {
-                val json = bookSourceFile.readText()
-                ImportOldData.importOldSource(json)
+            if (replace) {
+                appDb.bookChapterDao.delByBook(bookUrl)
             }
+            appDb.bookChapterDao.insert(*list.toTypedArray())
         }
+    }
 
-        // 恢复RSS源
-        progress("rssSources.json")
-        appDb.rssSourceDao.deleteAll()
-        fileToListT<RssSource>(path, "rssSources.json")?.let {
-            appDb.rssSourceDao.insert(*it.toTypedArray())
+    private fun snapshotChapters(): Map<String, List<BookChapter>> {
+        return appDb.bookDao.all.associate { book ->
+            book.bookUrl to appDb.bookChapterDao.getChapterList(book.bookUrl)
+        }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
+     * 覆盖恢复后，为包内没有目录的书籍回填恢复前的章节。
+     */
+    private fun refillChapters(plan: RestorePlan, snapshot: Map<String, List<BookChapter>>) {
+        val covered = if (plan.has("bookChapter.json")) {
+            fileToListT<BookChapter>(plan.dir.path, "bookChapter.json")
+                .orEmpty()
+                .mapTo(hashSetOf()) { it.bookUrl }
+        } else {
+            emptySet()
         }
-
-        // 恢复RSS收藏
-        progress("rssStar.json")
-        appDb.rssStarDao.deleteAll()
-        fileToListT<RssStar>(path, "rssStar.json")?.let {
-            appDb.rssStarDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复源订阅
-        progress("sourceSub.json")
-        appDb.ruleSubDao.deleteAll()
-        fileToListT<RuleSub>(path, "sourceSub.json")?.let {
-            appDb.ruleSubDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复搜索引擎规则
-        progress("webSearchEngines.json")
-        val enginesFile = File(path, "webSearchEngines.json")
-        if (enginesFile.exists()) {
-            try {
-                val enginesJson = enginesFile.readText()
-                val engines = GSON.fromJsonArray<SearchEngine>(enginesJson).getOrNull()
-                if (engines != null) {
-                    SearchEngineHelper.saveSearchEngines(appCtx, engines)
-                }
-            } catch (e: Exception) {
-                AppLog.put("恢复搜索引擎规则出错\n${e.localizedMessage}", e)
-            }
-        }
-
-        // 恢复首页数据
-        progress("homepage.json")
-        val homepageFile = File(path, "homepage.json")
-        if (homepageFile.exists()) {
-            val json = homepageFile.readText()
-            val obj = GSON.fromJsonObject<Map<String, JsonElement>>(json).getOrNull()
-            if (obj != null) {
-                appDb.homepageModuleDao.deleteAll()
-                (obj["modules"] as? JsonArray)?.let { array ->
-                    val modules = GSON.fromJsonArray<HomepageModule>(array.toString()).getOrNull()
-                    modules?.let { appDb.homepageModuleDao.upsertAll(it) }
-                }
-                appDb.homepageCustomSetDao.deleteAll()
-                (obj["customSets"] as? JsonArray)?.let { array ->
-                    val sets = GSON.fromJsonArray<HomepageCustomSet>(array.toString()).getOrNull()
-                    sets?.forEach { set -> appDb.homepageCustomSetDao.upsert(set) }
-                }
-            }
-        }
-
-        // 恢复替换规则
-        progress("replaceRule.json")
-        appDb.replaceRuleDao.deleteAll()
-        fileToListT<ReplaceRule>(path, "replaceRule.json")?.let {
-            appDb.replaceRuleDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复搜索历史
-        progress(HighlightRuleStore.backupFileName)
-        File(path, HighlightRuleStore.backupFileName).takeIf { it.exists() }?.runCatching {
-            GSON.fromJsonObject<HighlightRuleStore.BackupData>(readText()).getOrNull()?.let {
-                HighlightRuleStore.restoreBackupData(appCtx, it, path)
-            }
-        }?.onFailure {
-            AppLog.put("恢复高亮规则出错\n${it.localizedMessage}", it)
-        }
-        progress("searchHistory.json")
-        appDb.searchKeywordDao.deleteAll()
-        fileToListT<SearchKeyword>(path, "searchHistory.json")?.let {
-            appDb.searchKeywordDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复TXT目录规则
-        progress("txtTocRule.json")
-        appDb.txtTocRuleDao.deleteAll()
-        fileToListT<TxtTocRule>(path, "txtTocRule.json")?.let {
-            appDb.txtTocRuleDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复HTTP TTS配置
-        progress("httpTTS.json")
-        appDb.httpTTSDao.deleteAll()
-        fileToListT<HttpTTS>(path, "httpTTS.json")?.let {
-            appDb.httpTTSDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复词典规则
-        progress("dictRule.json")
-        appDb.dictRuleDao.deleteAll()
-        fileToListT<DictRule>(path, "dictRule.json")?.let {
-            appDb.dictRuleDao.insert(*it.toTypedArray())
-        }
-
-        // 恢复键盘辅助（先删除再插入，保证与备份数据一致）
-        progress("keyboardAssists.json")
-        appDb.keyboardAssistsDao.deleteAll()
-        fileToListT<KeyboardAssist>(path, "keyboardAssists.json")?.let {
-            appDb.keyboardAssistsDao.insert(*it.toTypedArray())
-        }
-
-        progress(CoverGalleryRepository.backupDirName)
-        restoreCoverGallery(path)
-
-        // 恢复阅读记录（先清空再导入）
-        progress("readRecord.json")
-        val readRecords = fileToListT<ReadRecord>(path, "readRecord.json").orEmpty()
-        val readRecordDetails = fileToListT<ReadRecordDetail>(path, "readRecordDetail.json").orEmpty()
-        val readRecordSessions = fileToListT<ReadRecordSession>(path, "readRecordSession.json").orEmpty()
-        if (readRecords.isNotEmpty() || readRecordDetails.isNotEmpty() || readRecordSessions.isNotEmpty()) {
-            // 预加载书名→作者映射，避免 repairRecords 中逐条查询 bookDao
-            val bookAuthorMap = appDb.bookDao.all
-                .mapNotNull { book -> book.author.trim().ifBlank { null }?.let { book.name to it } }
-                .toMap()
-            // 整个清空+导入+修复在一个事务中执行，避免 N 次事务提交开销
-            appDb.withTransaction {
-                appDb.readRecordDao.clear()
-                appDb.readRecordDao.clearDetails()
-                appDb.readRecordDao.clearSessions()
-                ReadRecordRepository(appDb.readRecordDao).apply {
-                    importRecords(
-                        readRecords,
-                        readRecordDetails,
-                        readRecordSessions,
-                    )
-                    repairRecords { bookName ->
-                        bookAuthorMap[bookName]
-                    }
-                }
-            }
-            appCtx.putPrefInt(
-                PreferKey.readRecordRepairVersion,
-                ReadRecordRepository.CURRENT_REPAIR_VERSION,
-            )
-        }
-
-        // 恢复服务器配置（需要解密）
-        progress("servers.json")
-        appDb.serverDao.deleteAll()
-        File(path, "servers.json").takeIf {
-            it.exists()
-        }?.runCatching {
-            var json = readText()
-            if (!json.isJsonArray()) {
-                json = aes.decryptStr(json)
-            }
-            GSON.fromJsonArray<Server>(json).getOrNull()?.let {
-                appDb.serverDao.insert(*it.toTypedArray())
-            }
-        }?.onFailure {
-            AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it)
-        }
-
-        // 恢复直链上传配置
-        progress(DirectLinkUpload.ruleFileName)
-        DirectLinkUpload.delConfig()
-        File(path, DirectLinkUpload.ruleFileName).takeIf {
-            it.exists()
-        }?.runCatching {
-            val json = readText()
-            ACache.get(cacheDir = false).put(DirectLinkUpload.ruleFileName, json)
-        }?.onFailure {
-            AppLog.put("恢复直链上传出错\n${it.localizedMessage}", it)
-        }
-
-        // 恢复主题配置
-        progress(ThemeConfig.configFileName)
-        ThemeConfig.replaceConfigs(emptyList())
-        File(path, ThemeConfig.configFileName).takeIf {
-            it.exists()
-        }?.runCatching {
-            val configs = GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrNull()
-            FileUtils.delete(ThemeConfig.configFilePath)
-            copyTo(File(ThemeConfig.configFilePath))
-            ThemeConfig.replaceConfigs(configs)
-        }?.onFailure {
-            AppLog.put("恢复主题出错\n${it.localizedMessage}", it)
-        }
-
-        // 恢复封面规则配置
-        progress(BookCover.configFileName)
-        BookCover.delCoverRule()
-        File(path, BookCover.configFileName).takeIf {
-            it.exists()
-        }?.runCatching {
-            val json = readText()
-            BookCover.saveCoverRule(json)
-            // 清除封面缓存，确保使用新配置生成封面
-            CoverImageView.clearAllCache()
-        }?.onFailure {
-            AppLog.put("恢复封面规则出错\n${it.localizedMessage}", it)
-        }
-
-        // 恢复阅读界面配置（可配置忽略）
-        if (!BackupConfig.ignoreReadConfig) {
-            progress("backgroundImages")
-            restoreReadConfigBackgrounds(path)
-            // 恢复阅读界面配置
-            progress(ReadBookConfig.configFileName)
-            File(path, ReadBookConfig.configFileName).takeIf {
-                it.exists()
-            }?.runCatching {
-                FileUtils.delete(ReadBookConfig.configFilePath)
-                copyTo(File(ReadBookConfig.configFilePath))
-                ReadBookConfig.initConfigs()
-            }?.onFailure {
-                AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it)
-            }
-            progress(ReadBookConfig.shareConfigFileName)
-            File(path, ReadBookConfig.shareConfigFileName).takeIf {
-                it.exists()
-            }?.runCatching {
-                FileUtils.delete(ReadBookConfig.shareConfigFilePath)
-                copyTo(File(ReadBookConfig.shareConfigFilePath))
-                ReadBookConfig.initShareConfig()
-            }?.onFailure {
-                AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it)
-            }
-        }
-
-        // 恢复主题背景图片
-        fixReadConfigBackgroundPaths()
-
-        // 恢复SharedPreferences配置（应用主配置）
-        progress("config.xml")
-        // 旧备份没有 highlightRule.json，需要允许 config.xml 恢复高亮规则键
-        val allowHighlightKeys = !File(path, HighlightRuleStore.backupFileName).exists()
-        readBackupPrefs(path, "config")?.let { map ->
-            clearThemeRestorePrefs()
-            val edit = appCtx.defaultSharedPreferences.edit()
-
-            map.forEach { (key, value) ->
-                if (BackupConfig.keyIsNotIgnore(key, allowHighlightKeys) || key in themeRestorePrefKeys) {
-                    when (key) {
-                        // WebDav密码需要解密
-                        PreferKey.webDavPassword -> {
-                            kotlin.runCatching {
-                                aes.decryptStr(value.toString())
-                            }.getOrNull()?.let {
-                                edit.putString(key, it)
-                            } ?: let {
-                                // 解密失败时，如果本地密码为空则使用备份中的值
-                                if (appCtx.getPrefString(PreferKey.webDavPassword)
-                                        .isNullOrBlank()
-                                ) {
-                                    edit.putString(key, value.toString())
-                                }
-                            }
-                        }
-
-                        else -> when (value) {
-                            is Int -> edit.putInt(key, value)
-                            is Boolean -> edit.putBoolean(key, value)
-                            is Long -> edit.putLong(key, value)
-                            is Float -> edit.putFloat(key, value)
-                            is String -> edit.putString(key, value)
-                        }
-                    }
-                }
-            }
-            edit.apply()
-        }
-        // 如果从 config.xml 恢复了高亮规则，清除缓存以强制重新加载
-        if (allowHighlightKeys) {
-            HighlightRuleStore.clearCache()
-        }
-
-        // 修正主题背景图片路径
-        progress("themeBackgroundImages")
-        restoreThemeBackgrounds(path, clearExisting = true)
-        progress(runtimeSourceCacheFileName)
-        restoreRuntimeSourceCaches(path)
-        progress(bookCacheFolderName)
-        restoreBookCache(path)
-        fixThemeBackgroundPaths()
-        fixThemeConfigBackgroundPaths()
-
-        // 恢复视频播放配置
-        progress("videoConfig.xml")
-        readBackupPrefs(path, "videoConfig")?.let { map ->
-            appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit().apply {
-                clear()
-                map.forEach { (key, value) ->
-                    when (value) {
-                        is Int -> putInt(key, value)
-                        is Boolean -> putBoolean(key, value)
-                        is Long -> putLong(key, value)
-                        is Float -> putFloat(key, value)
-                        is String -> putString(key, value)
-                    }
-                }
-                apply()
-            }
-        }
-
-        // 应用阅读配置
-        progress("applyRestoreConfig")
-        ReadBookConfig.apply {
-            comicStyleSelect = appCtx.getPrefInt(PreferKey.comicStyleSelect)
-            readStyleSelect = appCtx.getPrefInt(PreferKey.readStyleSelect)
-            shareLayout = appCtx.getPrefBoolean(PreferKey.shareLayout)
-            hideStatusBar = appCtx.getPrefBoolean(PreferKey.hideStatusBar)
-            hideNavigationBar = appCtx.getPrefBoolean(PreferKey.hideNavigationBar)
-            autoReadSpeed = appCtx.getPrefInt(PreferKey.autoReadSpeed, 46)
-        }
-
-        appCtx.toastOnUi(R.string.restore_success)
-
-        // 应用主题和图标变更
-        withContext(Main) {
-            delay(100)
-            if (!BuildConfig.DEBUG) {
-                LauncherIconHelp.changeIcon(appCtx.getPrefString(PreferKey.launcherIcon))
-            }
-            ThemeConfig.applyDayNight(appCtx)
+        snapshot.forEach { (bookUrl, chapters) ->
+            if (bookUrl in covered) return@forEach
+            if (appDb.bookDao.getBook(bookUrl) == null) return@forEach
+            if (appDb.bookChapterDao.getChapterCount(bookUrl) > 0) return@forEach
+            appDb.bookChapterDao.insert(*chapters.toTypedArray())
+            LogUtils.d(TAG, "回填章节目录: $bookUrl, ${chapters.size} 章")
         }
     }
 
@@ -1042,28 +833,38 @@ object Restore {
         return null
     }
 
-    private fun restoreRuntimeSourceCaches(path: String) {
+    private fun restoreRuntimeSourceCaches(path: String, replace: Boolean) {
         val runtimeCacheFile = File(path, runtimeSourceCacheFileName)
         if (!runtimeCacheFile.exists()) return
         val caches = fileToListT<Cache>(path, runtimeSourceCacheFileName).orEmpty()
-        appDb.cacheDao.deleteAllRuntimeSourceCaches()
-        AppCacheManager.clearSourceVariables()
+        if (replace) {
+            appDb.cacheDao.deleteAllRuntimeSourceCaches()
+            AppCacheManager.clearSourceVariables()
+        }
         if (caches.isNotEmpty()) {
             appDb.cacheDao.insert(*caches.toTypedArray())
         }
     }
 
-    private suspend fun restoreCoverGallery(path: String) {
+    private suspend fun restoreCoverGallery(path: String, replace: Boolean) {
         val galleryDir = File(path, CoverGalleryRepository.backupDirName)
         if (!galleryDir.exists() || !galleryDir.isDirectory) return
         val oldGroupIds = appDb.coverGalleryDao.allGroups.map { it.id }
 
-        appDb.coverGalleryDao.deleteAllImages()
-        appDb.coverGalleryDao.deleteAllGroups()
+        if (replace) {
+            appDb.coverGalleryDao.deleteAllImages()
+            appDb.coverGalleryDao.deleteAllGroups()
+            appDb.cacheDao.deleteRuntimeSourceCachesByPrefix(CoverGalleryRepository.randomSeedKeyPrefix)
+            oldGroupIds.forEach {
+                CacheManager.deleteMemory(CoverGalleryRepository.randomSeedKeyPrefix + it)
+            }
+        }
 
-        appDb.cacheDao.deleteRuntimeSourceCachesByPrefix(CoverGalleryRepository.randomSeedKeyPrefix)
-        oldGroupIds.forEach {
-            CacheManager.deleteMemory(CoverGalleryRepository.randomSeedKeyPrefix + it)
+        val existingGroups = if (replace) emptyList() else appDb.coverGalleryDao.allGroups
+        val existingPaths = if (replace) {
+            hashSetOf()
+        } else {
+            appDb.coverGalleryDao.allImages.mapTo(hashSetOf()) { it.path }
         }
 
         val targetDir = appCtx.externalFiles.getFile("covers").createFolderIfNotExist()
@@ -1072,20 +873,26 @@ object Restore {
             ?.filter { it.isDirectory }
             ?.sortedBy { it.name }
             ?.forEachIndexed { groupIndex, groupDir ->
-                val groupId = appDb.coverGalleryDao.insertGroup(
-                    CoverGalleryGroup(
-                        name = groupDir.name,
-                        order = groupIndex,
-                    ),
-                )
+                val groupId = existingGroups.firstOrNull { it.name == groupDir.name }?.id
+                    ?: appDb.coverGalleryDao.insertGroup(
+                        CoverGalleryGroup(
+                            name = groupDir.name,
+                            order = groupIndex,
+                        ),
+                    )
                 val images = groupDir.listFiles()
                     ?.filter { it.isFile && it.isCoverGalleryImageFile() }
                     ?.sortedBy { it.name }
                     ?.mapIndexed { imageIndex, imageFile ->
-                        val targetFile = File(
-                            targetDir,
-                            uniqueCoverGalleryImageName(imageFile.name, usedImageNames),
-                        )
+                        val targetName = if (replace) {
+                            uniqueCoverGalleryImageName(imageFile.name, usedImageNames)
+                        } else {
+                            imageFile.name
+                        }
+                        val targetFile = File(targetDir, targetName)
+                        if (!replace && !existingPaths.add(targetFile.absolutePath)) {
+                            return@mapIndexed null
+                        }
                         imageFile.copyTo(targetFile, overwrite = true)
                         CoverGalleryImage(
                             groupId = groupId,
@@ -1093,6 +900,7 @@ object Restore {
                             order = imageIndex,
                         )
                     }
+                    ?.filterNotNull()
                     .orEmpty()
                 if (images.isNotEmpty()) {
                     appDb.coverGalleryDao.insertImages(*images.toTypedArray())
@@ -1159,7 +967,7 @@ object Restore {
         }.getOrNull()
     }
 
-    private fun restoreReadConfigBackgrounds(path: String) {
+    private fun restoreReadConfigBackgrounds(path: String, clearExisting: Boolean) {
         val bgNames = linkedSetOf<String>()
         File(path, ReadBookConfig.configFileName).takeIf { it.exists() }?.runCatching {
             GSON.fromJsonArray<ReadBookConfig.Config>(readText()).getOrThrow()
@@ -1171,7 +979,9 @@ object Restore {
         }?.getOrNull()?.let { config ->
             collectBgNames(config, bgNames)
         }
-        clearReadConfigBackgrounds()
+        if (clearExisting) {
+            clearReadConfigBackgrounds()
+        }
         if (bgNames.isEmpty()) return
         val bgDir = appCtx.externalFiles.getFile("bg")
         if (!bgDir.exists()) {
@@ -1730,8 +1540,7 @@ object Restore {
                             val updatedChapters = chapterList.map { chapter ->
                                 chapter.copy(bookUrl = matchedBook.bookUrl)
                             }
-                            // 删除旧的章节，插入新的
-                            appDb.bookChapterDao.delByBook(matchedBook.bookUrl)
+                            // 按主键 (bookUrl, index) REPLACE，不删除本地已有章节
                             appDb.bookChapterDao.insert(*updatedChapters.toTypedArray())
                             restoredBookCount++
                             restoredChapterCount += updatedChapters.size
@@ -1740,8 +1549,7 @@ object Restore {
                     }
                 }
             } else {
-                // 书籍存在，直接恢复章节
-                appDb.bookChapterDao.delByBook(bookUrl)
+                // 书籍存在：按主键 REPLACE，保留本地已有的其他章节
                 appDb.bookChapterDao.insert(*chapterList.toTypedArray())
                 restoredBookCount++
                 restoredChapterCount += chapterList.size

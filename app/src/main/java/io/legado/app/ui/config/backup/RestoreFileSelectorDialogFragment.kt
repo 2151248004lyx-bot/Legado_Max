@@ -27,6 +27,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.help.storage.BackupInfoHelper
+import io.legado.app.help.storage.RestorePolicy
 import io.legado.app.help.storage.ValidationResult
 import io.legado.app.help.storage.ValidationState
 import io.legado.app.ui.config.ValidationErrorDetailDialog
@@ -57,7 +58,7 @@ class RestoreFileSelectorDialogFragment : BaseComposeDialogFragment() {
             dismiss()
             return
         }
-        viewModel.loadFiles(backupPath)
+        viewModel.loadFiles(backupPath, arguments?.getString(ARG_POLICY))
     }
 
     @Composable
@@ -108,7 +109,7 @@ class RestoreFileSelectorDialogFragment : BaseComposeDialogFragment() {
         }
 
         MultiSelectDialogContent(
-            title = stringResource(R.string.fvd_title),
+            title = uiState.manifestSummary ?: stringResource(R.string.fvd_title),
             groups = groups,
             selectedKeys = uiState.selectedKeys,
             totalSizeCalculator = viewModel::formatTotalSize,
@@ -146,10 +147,15 @@ class RestoreFileSelectorDialogFragment : BaseComposeDialogFragment() {
 
     companion object {
         private const val ARG_BACKUP_PATH = "backupPath"
+        private const val ARG_POLICY = "policy"
 
-        fun newInstance(backupPath: String): RestoreFileSelectorDialogFragment = RestoreFileSelectorDialogFragment().apply {
+        fun newInstance(
+            backupPath: String,
+            policy: RestorePolicy = RestorePolicy.Merge,
+        ): RestoreFileSelectorDialogFragment = RestoreFileSelectorDialogFragment().apply {
             arguments = Bundle().apply {
                 putString(ARG_BACKUP_PATH, backupPath)
+                putString(ARG_POLICY, policy.key)
             }
         }
     }

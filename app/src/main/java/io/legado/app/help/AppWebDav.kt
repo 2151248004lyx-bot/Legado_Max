@@ -9,7 +9,9 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.storage.BackupCrypto
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.webdav.Authorization
 import io.legado.app.lib.webdav.WebDav
@@ -192,11 +194,24 @@ object AppWebDav {
      */
     @Throws(WebDavException::class)
     suspend fun downloadAndUnzipBackup(name: String) {
-        authorization?.let {
-            val webDav = WebDav(rootWebDavUrl + name, it)
-            webDav.downloadTo(Backup.zipFilePath, true)
+        val authorization = authorization ?: return
+        val webDav = WebDav(rootWebDavUrl + name, authorization)
+        webDav.downloadTo(Backup.zipFilePath, true)
+        val zipFile = File(Backup.zipFilePath)
+        val source = if (BackupCrypto.isEncrypted(zipFile)) {
+            val password = LocalConfig.password
+                ?: throw WebDavException("备份已加密，请先设置备份密码")
+            File("${Backup.zipFilePath}.dec").also { decrypted ->
+                BackupCrypto.decrypt(zipFile, decrypted, password)
+            }
+        } else {
+            zipFile
+        }
+        try {
             FileUtils.delete(Backup.backupPath)
-            ZipUtils.unZipToPath(File(Backup.zipFilePath), Backup.backupPath)
+            ZipUtils.unZipToPath(source, Backup.backupPath)
+        } finally {
+            if (source != zipFile) FileUtils.delete(source.absolutePath)
         }
     }
 
@@ -263,10 +278,53 @@ object AppWebDav {
     @Throws(Exception::class)
     suspend fun backUpWebDav(fileName: String) {
         if (!NetworkUtils.isAvailable()) return
-        authorization?.let {
+        val authorization = authorization ?: return
+        val zipFile = File(Backup.zipFilePath)
+        var uploadFile = zipFile
+        var encryptedTemp: File? = null
+        try {
+            if (AppConfig.backupEncrypt) {
+                val password = LocalConfig.password
+                if (password.isNullOrBlank()) {
+                    AppLog.put("未设置备份密码，本次备份按明文上传")
+                } else {
+                    encryptedTemp = File("${Backup.zipFilePath}.enc")
+                    BackupCrypto.encrypt(zipFile, encryptedTemp, password)
+                    uploadFile = encryptedTemp
+                }
+            }
             val putUrl = "$rootWebDavUrl$fileName"
-            WebDav(putUrl, it).upload(Backup.zipFilePath)
+            WebDav(putUrl, authorization).upload(uploadFile)
+        } finally {
+            encryptedTemp?.let { FileUtils.delete(it.absolutePath) }
         }
+        cleanupOldBackups()
+    }
+
+    /**
+     * 按设备名清理云端旧备份，保留最近 [AppConfig.backupKeepCount] 份。
+     * 固定名（backup-latest-*）永不删除。
+     */
+    private suspend fun cleanupOldBackups() {
+        val keep = AppConfig.backupKeepCount.coerceAtLeast(1)
+        val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
+        val files = runCatching { WebDav(rootWebDavUrl, authorization!!).listFiles() }
+            .getOrNull()
+            ?: return
+        files.asSequence()
+            .filter { it.displayName.startsWith("backup") && it.displayName.endsWith(".zip") }
+            .filter { !it.displayName.startsWith("backup-latest") }
+            .filter { deviceName == null || it.displayName.contains(deviceName) }
+            .sortedByDescending { it.lastModify }
+            .drop(keep)
+            .forEach { old ->
+                runCatching {
+                    WebDav(rootWebDavUrl + old.displayName, authorization!!).delete()
+                    AppLog.put("已清理旧备份: ${old.displayName}")
+                }.onFailure {
+                    AppLog.put("清理旧备份失败: ${old.displayName}\n${it.localizedMessage}")
+                }
+            }
     }
 
     // ==================== 封面图集同步 ====================

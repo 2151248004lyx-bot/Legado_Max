@@ -112,6 +112,8 @@ object BackupInfoHelper {
         "bookCacheIndex.json" to "书籍缓存索引",
         "bookCacheBooks.json" to "书籍缓存书架信息",
         "bookChapterCache.json" to "书籍章节目录",
+        "bookChapter.json" to "章节目录",
+        BackupManifest.FILE_NAME to "备份清单",
         ReadBookConfig.configFileName to "阅读样式配置",
         ReadBookConfig.shareConfigFileName to "共享阅读配置",
         ThemeConfig.configFileName to "主题配置",
@@ -193,6 +195,8 @@ object BackupInfoHelper {
         val runtimeCacheCount = appDb.cacheDao.getRuntimeSourceCacheCount(System.currentTimeMillis())
         addItem("runtimeSourceCache.json", runtimeCacheCount * 800L)
 
+        addItem("bookChapter.json", cachedChapterCount() * 200L)
+
         val highlightRuleSize = GSON.toJson(HighlightRuleStore.backupData(appCtx)).length.toLong()
         addItem(HighlightRuleStore.backupFileName, highlightRuleSize)
 
@@ -259,11 +263,29 @@ object BackupInfoHelper {
         addItem(CoverGalleryRepository.backupDirName, imageSize + estimatedDataSize)
     }
 
+    /**
+     * 有缓存目录的书籍的章节总数（章节目录的默认备份范围）。
+     */
+    private fun cachedChapterCount(): Int {
+        val cacheDir = File(BookHelp.cachePath)
+        if (!cacheDir.exists() || !cacheDir.isDirectory) return 0
+        val folders = cacheDir.listFiles()
+            ?.filter { it.isDirectory }
+            ?.mapTo(hashSetOf()) { it.name }
+            .orEmpty()
+        if (folders.isEmpty()) return 0
+        return appDb.bookDao.all
+            .filter { it.getFolderName() in folders }
+            .sumOf { appDb.bookChapterDao.getChapterCount(it.bookUrl) }
+    }
+
     private fun isFileSelectedForBackup(
         fileName: String,
         scope: BackupSelectorConfig.Scope
     ): Boolean {
         return when (fileName) {
+            "bookChapter.json" -> BackupSelectorConfig.isSelected("bookChapter", scope)
+
             "book_cache",
             "bookChapterCache.json",
             "bookCacheBooks.json",
@@ -415,6 +437,7 @@ object BackupInfoHelper {
             "servers" -> appDb.serverDao.count
             "homepage" -> appDb.homepageModuleDao.count + appDb.homepageCustomSetDao.count
             "runtimeSourceCache" -> appDb.cacheDao.getRuntimeSourceCacheCount(System.currentTimeMillis())
+            "bookChapter" -> cachedChapterCount()
             else -> 0
         }
     }

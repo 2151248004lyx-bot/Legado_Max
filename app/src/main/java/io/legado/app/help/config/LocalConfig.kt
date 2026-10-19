@@ -37,12 +37,51 @@ by appCtx.getSharedPreferences("local_plus", Context.MODE_PRIVATE) {
         }
 
     /**
-     * 最后一次备份的时间戳
+     * 最后一次备份尝试的时间戳（无论成功失败）。
+     *
+     * 保留该字段用于「启动时是否提示恢复云端新备份」等既有逻辑；
+     * 自动备份的节流与重试请使用 [lastLocalBackupSuccess] / [lastCloudBackupSuccess]。
      */
     var lastBackup: Long
         get() = getLong("lastBackup", 0)
         set(value) {
             putLong("lastBackup", value)
+        }
+
+    /**
+     * 最后一次备份开始的时间戳。
+     */
+    var lastBackupAttempt: Long
+        get() = getLong("lastBackupAttempt", 0)
+        set(value) {
+            putLong("lastBackupAttempt", value)
+        }
+
+    /**
+     * 最后一次本地备份成功的时间戳。
+     */
+    var lastLocalBackupSuccess: Long
+        get() = getLong("lastLocalBackupSuccess", 0)
+        set(value) {
+            putLong("lastLocalBackupSuccess", value)
+        }
+
+    /**
+     * 最后一次云端备份成功的时间戳。
+     */
+    var lastCloudBackupSuccess: Long
+        get() = getLong("lastCloudBackupSuccess", 0)
+        set(value) {
+            putLong("lastCloudBackupSuccess", value)
+        }
+
+    /**
+     * 自动备份连续失败次数，用于重试退避。
+     */
+    var backupRetryCount: Int
+        get() = getInt("backupRetryCount", 0)
+        set(value) {
+            edit { putInt("backupRetryCount", value) }
         }
 
     /**

@@ -2698,4 +2698,17 @@ Night: %5$s / %6$s / %7$s / %8$s</string>
     <string name="cache_manage_batch_empty">No cache to operate</string>
     <string name="cache_manage_batch_upload_done">Batch upload finished: %1$d succeeded, %2$d failed</string>
     <string name="delete_success">Deleted</string>
+    <!--Backup restore-->
+    <string name="pre_restore_snapshot_t">Pre-restore snapshot</string>
+    <string name="pre_restore_snapshot_s">Back up the database and chapter lists before restoring; keeps 3 copies</string>
+    <string name="backup_all_chapters_t">Back up all chapter lists</string>
+    <string name="backup_all_chapters_s">Off: only books with cached chapters; On: all books</string>
+    <string name="backup_encrypt_t">Encrypt backup package</string>
+    <string name="backup_encrypt_s">AES-GCM with the backup password; set a password first</string>
+    <string name="backup_keep_count_t">Keep recent backups</string>
+    <string name="restore_policy_title">Restore policy</string>
+    <string name="restore_policy_merge">Merge (keep local-only data)</string>
+    <string name="restore_policy_replace">Overwrite (remove local-only data)</string>
+    <string name="restore_policy_replace_confirm">Overwrite deletes data that exists locally but not in the backup. Continue?</string>
+    <string name="fvd_manifest_summary">%1$s · %2$s · %3$d items</string>
 </resources>

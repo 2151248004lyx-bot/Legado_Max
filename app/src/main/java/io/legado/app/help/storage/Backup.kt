@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import io.legado.app.BuildConfig
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
@@ -152,6 +153,7 @@ object Backup {
             "webSearchEngines.json",
             "replaceRule.json",
             HighlightRuleStore.backupFileName,
+            "bookChapter.json",
             "readRecord.json",
             "readRecordDetail.json",
             "readRecordSession.json",
@@ -367,13 +369,25 @@ object Backup {
      * @return 格式化的备份文件名
      */
     private fun getNowZipFileName(): String {
-        val backupDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val backupTime = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault())
             .format(Date(System.currentTimeMillis()))
-        val deviceName = AppConfig.webDavDeviceName
-        return if (deviceName?.isNotBlank() == true) {
-            "backup${backupDate}-${deviceName}.zip"
+        val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
+        return if (deviceName != null) {
+            "backup-${backupTime}-${deviceName}.zip"
         } else {
-            "backup${backupDate}.zip"
+            "backup-${backupTime}.zip"
+        }.normalizeFileName()
+    }
+
+    /**
+     * 仅保留最新备份时使用的固定名，按设备隔离，避免多设备互相覆盖。
+     */
+    private fun getLatestZipFileName(): String {
+        val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
+        return if (deviceName != null) {
+            "backup-latest-${deviceName}.zip"
+        } else {
+            "backup-latest.zip"
         }.normalizeFileName()
     }
 
@@ -385,38 +399,40 @@ object Backup {
      */
     private fun shouldBackup(): Boolean {
         if (!AppConfig.autoBackup) {
-            // 用户关闭了自动备份开关，跳过。不清 lastBackup，避免下次打开时立即触发。
+            // 用户关闭了自动备份开关，跳过。不清时间戳，避免下次打开时立即触发。
             return false
         }
-        val lastBackup = LocalConfig.lastBackup
-        return lastBackup + TimeUnit.DAYS.toMillis(1) < System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val day = TimeUnit.DAYS.toMillis(1)
+        // 本地：24 小时内成功过就跳过
+        if (LocalConfig.lastLocalBackupSuccess + day < now) {
+            return true
+        }
+        // 云端：配置了 WebDAV 且 24 小时没有成功备份时重试，失败按 1h/6h/24h 退避
+        if (AppWebDav.isOk && LocalConfig.lastCloudBackupSuccess + day < now) {
+            val wait = when (LocalConfig.backupRetryCount) {
+                0 -> 0L
+                1 -> TimeUnit.HOURS.toMillis(1)
+                2 -> TimeUnit.HOURS.toMillis(6)
+                else -> day
+            }
+            return LocalConfig.lastBackupAttempt + wait < now
+        }
+        return false
     }
 
     /**
-     * 自动备份入口
-     * 在满足条件时自动执行备份，包括：
-     * - 距离上次备份超过24小时
-     * - WebDav上不存在当日备份文件
-     * 
-     * @param context Android Context
+     * 自动备份入口。
+     *
+     * 频率由「本地/云端上次成功时间」控制（见 [shouldBackup]）；
+     * 失败时按 1h/6h/24h 退避重试，不再因为一次上传失败就静默 24 小时。
      */
     fun autoBack(context: Context) {
         if (shouldBackup()) {
             Coroutine.async {
                 mutex.withLock {
                     if (shouldBackup()) {
-                        val backupZipFileName = getNowZipFileName()
-                        val hasBackUp = try {
-                            AppWebDav.hasBackUp(backupZipFileName)
-                        } catch (e: Exception) {
-                            AppLog.put("检查WebDav备份是否存在失败，继续执行备份\n${e.localizedMessage}", e)
-                            false
-                        }
-                        if (!hasBackUp) {
-                            runBackup(context, AppConfig.backupPath, localOnly = false, onProgress = null)
-                        } else {
-                            LocalConfig.lastBackup = System.currentTimeMillis()
-                        }
+                        runBackup(context, AppConfig.backupPath, localOnly = false, onProgress = null)
                     }
                 }
             }.onError {
@@ -523,7 +539,9 @@ object Backup {
         onProgress: ((String) -> Unit)? = null
     ) {
         LogUtils.d(TAG, "开始备份 path:$path")
-        LocalConfig.lastBackup = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        LocalConfig.lastBackup = now
+        LocalConfig.lastBackupAttempt = now
         val aes = BackupAES()
         FileUtils.delete(backupPath)
 
@@ -564,6 +582,10 @@ object Backup {
             onProgress?.invoke(BackupInfoHelper.getDisplayName(HighlightRuleStore.backupFileName))
             FileUtils.createFileIfNotExist(backupPath + File.separator + HighlightRuleStore.backupFileName)
                 .writeText(GSON.toJson(HighlightRuleStore.backupData(appCtx)))
+        }
+        if (selectedFiles.contains("bookChapter.json")) {
+            onProgress?.invoke(BackupInfoHelper.getDisplayName("bookChapter.json"))
+            stageBookChapters(backupPath)
         }
         if (selectedFiles.contains("readRecord.json")) {
             writeListToJson(mergeReadRecordsForLegacyCompat(appDb.readRecordDao.all), "readRecord.json", backupPath, onProgress)
@@ -737,6 +759,9 @@ object Backup {
 
         currentCoroutineContext().ensureActive()
 
+        // 清单最后写，保证记录的就是实际要打包的内容
+        writeManifest(backupPath, scope)
+
         val zipFileName = getNowZipFileName()
         val paths = getBackupPaths()
         FileUtils.delete(zipFilePath)
@@ -744,7 +769,7 @@ object Backup {
 
         // 根据配置决定使用固定文件名还是带日期的文件名
         val backupFileName = if (AppConfig.onlyLatestBackup) {
-            "backup.zip"
+            getLatestZipFileName()
         } else {
             zipFileName
         }
@@ -767,6 +792,7 @@ object Backup {
                         copyBackup(File(path), backupFileName)
                     }
                 }
+                LocalConfig.lastLocalBackupSuccess = System.currentTimeMillis()
             }
 
             // 上传到WebDav云端（仅本地模式时跳过）
@@ -774,7 +800,10 @@ object Backup {
                 try {
                     onProgress?.invoke(BackupInfoHelper.getDisplayName("webDavBackup"))
                     AppWebDav.backUpWebDav(zipFileName)
+                    LocalConfig.lastCloudBackupSuccess = System.currentTimeMillis()
+                    LocalConfig.backupRetryCount = 0
                 } catch (e: Exception) {
+                    LocalConfig.backupRetryCount = LocalConfig.backupRetryCount + 1
                     AppLog.put("上传备份至webdav失败\n$e", e)
                 }
             }
@@ -1067,6 +1096,143 @@ object Backup {
             writeListToJson(allChapters, fileName, rootPath, onProgress)
             LogUtils.d(TAG, "章节目录已备份，共 ${allChapters.size} 章")
         }
+    }
+
+    /**
+     * 备份章节目录。
+     *
+     * 默认只导出「有缓存目录」的书籍：它们才是离线阅读真正需要目录的那批，
+     * 体积可控。开启 [AppConfig.backupAllChapters] 后导出全量目录。
+     */
+    private suspend fun stageBookChapters(rootPath: String) {
+        val books = if (AppConfig.backupAllChapters) {
+            appDb.bookDao.all
+        } else {
+            val cacheDir = File(BookHelp.cachePath)
+            val cachedFolders = cacheDir.listFiles()
+                ?.filter { it.isDirectory }
+                ?.mapTo(hashSetOf()) { it.name }
+                .orEmpty()
+            appDb.bookDao.all.filter { it.getFolderName() in cachedFolders }
+        }
+        val chapters = books.flatMap { appDb.bookChapterDao.getChapterList(it.bookUrl) }
+        if (chapters.isNotEmpty()) {
+            writeListToJson(chapters, "bookChapter.json", rootPath)
+            LogUtils.d(TAG, "章节目录已备份: ${books.size} 本, ${chapters.size} 章")
+        }
+    }
+
+    /**
+     * 写入备份清单。必须在所有内容都 stage 完成后调用。
+     */
+    private fun writeManifest(rootPath: String, scope: BackupSelectorConfig.Scope) {
+        val root = File(rootPath)
+        val entries = root.listFiles()
+            ?.sortedBy { it.name }
+            ?.filter { it.name != BackupManifest.FILE_NAME }
+            ?.map { file ->
+                when {
+                    file.isDirectory -> BackupManifest.dirEntry(file.name, file)
+                    file.name.endsWith(".xml") -> BackupManifest.fileEntry(
+                        file.name, BackupManifest.KIND_PREFS, file
+                    )
+
+                    file.name.endsWith(".json") -> BackupManifest.fileEntry(
+                        file.name, BackupManifest.KIND_DB, file
+                    )
+
+                    else -> BackupManifest.fileEntry(
+                        file.name, BackupManifest.KIND_CONFIG, file
+                    )
+                }
+            }
+            .orEmpty()
+        val manifest = BackupManifest(
+            format = BackupManifest.FORMAT_V2,
+            createdAt = System.currentTimeMillis(),
+            appVersionCode = BuildConfig.VERSION_CODE,
+            dbVersion = runCatching { appDb.openHelper.readableDatabase.version }.getOrDefault(0),
+            deviceName = AppConfig.webDavDeviceName.orEmpty(),
+            scope = scope.key,
+            policyHint = BackupManifest.POLICY_MERGE,
+            encrypted = false,
+            entries = entries,
+        )
+        BackupManifest.write(File(root, BackupManifest.FILE_NAME), manifest)
+    }
+
+    /**
+     * 恢复前快照：只导数据库与章节目录，不含缓存/图片，体积小、生成快。
+     *
+     * 快照本身是合法备份包（带 manifest），可直接通过恢复流程回滚。
+     */
+    suspend fun createSnapshot(onProgress: ((String) -> Unit)? = null): File? {
+        return mutex.withLock {
+            val staging = appCtx.filesDir.getFile("pre_restore_stage")
+            FileUtils.delete(staging)
+            staging.createFolderIfNotExist()
+            val stagingPath = staging.absolutePath
+            var result: File? = null
+            try {
+                writeListToJson(appDb.bookDao.all, "bookshelf.json", stagingPath, onProgress)
+                writeListToJson(appDb.bookmarkDao.all, "bookmark.json", stagingPath, onProgress)
+                writeListToJson(appDb.bookGroupDao.all, "bookGroup.json", stagingPath, onProgress)
+                writeListToJson(appDb.bookSourceDao.all, "bookSource.json", stagingPath, onProgress)
+                writeListToJson(appDb.rssSourceDao.all, "rssSources.json", stagingPath, onProgress)
+                writeListToJson(appDb.rssStarDao.all, "rssStar.json", stagingPath, onProgress)
+                writeListToJson(appDb.ruleSubDao.all, "sourceSub.json", stagingPath, onProgress)
+                writeListToJson(appDb.replaceRuleDao.all, "replaceRule.json", stagingPath, onProgress)
+                writeListToJson(appDb.searchKeywordDao.all, "searchHistory.json", stagingPath, onProgress)
+                writeListToJson(appDb.txtTocRuleDao.all, "txtTocRule.json", stagingPath, onProgress)
+                writeListToJson(appDb.httpTTSDao.all, "httpTTS.json", stagingPath, onProgress)
+                writeListToJson(appDb.keyboardAssistsDao.all, "keyboardAssists.json", stagingPath, onProgress)
+                writeListToJson(appDb.dictRuleDao.all, "dictRule.json", stagingPath, onProgress)
+                writeListToJson(appDb.readRecordDao.all, "readRecord.json", stagingPath, onProgress)
+                writeListToJson(
+                    appDb.readRecordDao.getAllDetailsList(),
+                    "readRecordDetail.json",
+                    stagingPath,
+                    onProgress,
+                )
+                writeListToJson(
+                    appDb.readRecordDao.getAllSessionsList(),
+                    "readRecordSession.json",
+                    stagingPath,
+                    onProgress,
+                )
+                val chapters = appDb.bookDao.all.flatMap {
+                    appDb.bookChapterDao.getChapterList(it.bookUrl)
+                }
+                writeListToJson(chapters, "bookChapter.json", stagingPath, onProgress)
+                GSON.toJson(appDb.serverDao.all).let { json ->
+                    val text = BackupAES().runCatching { encryptBase64(json) }.getOrDefault(json)
+                    File(staging, "servers.json").writeText(text)
+                }
+                writeManifest(stagingPath, BackupSelectorConfig.Scope.Local)
+
+                val snapshotDir = appCtx.externalFiles.getFile("pre_restore")
+                    .createFolderIfNotExist()
+                val name = "pre_restore-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+                    .format(Date(System.currentTimeMillis()))}.zip"
+                val target = File(snapshotDir, name)
+                if (ZipUtils.zipFiles(listOf(stagingPath), target.absolutePath)) {
+                    pruneSnapshots(snapshotDir)
+                    LogUtils.d(TAG, "恢复前快照已生成: ${target.absolutePath}")
+                    result = target
+                }
+            } finally {
+                FileUtils.delete(staging)
+            }
+            result
+        }
+    }
+
+    private fun pruneSnapshots(dir: File) {
+        dir.listFiles()
+            ?.filter { it.isFile && it.name.startsWith("pre_restore-") }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(3)
+            ?.forEach { FileUtils.delete(it.absolutePath) }
     }
 
     /**

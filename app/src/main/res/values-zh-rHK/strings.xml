@@ -2163,4 +2163,17 @@
     <string name="delete_success">已刪除</string>
     <string name="storage_cache_internal_name">內部緩存</string>
     <string name="storage_cache_internal_desc">Cronet 下載臨時檔案、匯出臨時檔案、WebView 網絡緩存等</string>
+    <!--Backup restore-->
+    <string name="pre_restore_snapshot_t">恢復前快照</string>
+    <string name="pre_restore_snapshot_s">恢復前自動備份資料庫與章節目錄，保留 3 份</string>
+    <string name="backup_all_chapters_t">備份全部章節目錄</string>
+    <string name="backup_all_chapters_s">關閉：只備份有快取章節的書；開啟：全部書籍</string>
+    <string name="backup_encrypt_t">加密備份包</string>
+    <string name="backup_encrypt_s">使用備份密碼進行 AES-GCM 加密，需先設定備份密碼</string>
+    <string name="backup_keep_count_t">保留最近備份數</string>
+    <string name="restore_policy_title">恢復方式</string>
+    <string name="restore_policy_merge">合併（保留本機獨有資料）</string>
+    <string name="restore_policy_replace">覆寫（刪除本機獨有資料）</string>
+    <string name="restore_policy_replace_confirm">覆寫會刪除本機有、備份沒有的資料，確定繼續？</string>
+    <string name="fvd_manifest_summary">%1$s · %2$s · %3$d 項</string>
 </resources>

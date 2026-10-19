@@ -950,6 +950,18 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val autoCheckNewBackup get() = appCtx.getPrefBoolean(PreferKey.autoCheckNewBackup, true)
 
+    /** 恢复前自动生成快照，默认开启。 */
+    val preRestoreSnapshot get() = appCtx.getPrefBoolean(PreferKey.preRestoreSnapshot, true)
+
+    /** 章节目录备份范围：默认只备有缓存目录的书。 */
+    val backupAllChapters get() = appCtx.getPrefBoolean(PreferKey.backupAllChapters, false)
+
+    /** 整包加密，默认关闭（保留手动解压查看能力）。 */
+    val backupEncrypt get() = appCtx.getPrefBoolean(PreferKey.backupEncrypt, false)
+
+    /** 保留的备份份数（按设备分组）。 */
+    val backupKeepCount get() = appCtx.getPrefInt(PreferKey.backupKeepCount, 5)
+
     val defaultHomePage get() = appCtx.getPrefString(PreferKey.defaultHomePage, "bookshelf") ?: "bookshelf"
 
     /**

@@ -2682,4 +2682,17 @@
     <string name="cache_manage_batch_empty">没有可操作的缓存</string>
     <string name="cache_manage_batch_upload_done">批量上传完成：成功 %1$d 个，失败 %2$d 个</string>
     <string name="delete_success">已删除</string>
+    <!--Backup restore-->
+    <string name="pre_restore_snapshot_t">恢复前快照</string>
+    <string name="pre_restore_snapshot_s">恢复前自动备份数据库与章节目录，保留 3 份</string>
+    <string name="backup_all_chapters_t">备份全部章节目录</string>
+    <string name="backup_all_chapters_s">关闭：只备份有缓存章节的书；开启：全部书籍</string>
+    <string name="backup_encrypt_t">加密备份包</string>
+    <string name="backup_encrypt_s">使用备份密码进行 AES-GCM 加密，需先设置备份密码</string>
+    <string name="backup_keep_count_t">保留最近备份数</string>
+    <string name="restore_policy_title">恢复方式</string>
+    <string name="restore_policy_merge">合并（保留本地独有数据）</string>
+    <string name="restore_policy_replace">覆盖（删除本地独有数据）</string>
+    <string name="restore_policy_replace_confirm">覆盖会删除本地有、备份没有的数据，确定继续？</string>
+    <string name="fvd_manifest_summary">%1$s · %2$s · %3$d 项</string>
 </resources>

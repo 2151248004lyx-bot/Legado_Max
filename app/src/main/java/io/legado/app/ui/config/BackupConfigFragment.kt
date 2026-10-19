@@ -35,6 +35,7 @@ import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
+import io.legado.app.help.storage.RestorePolicy
 import io.legado.app.ui.config.backup.RestoreFileSelectorDialogFragment
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.dialog.BackupInfoDialog
@@ -73,6 +74,7 @@ class BackupConfigFragment : PreferenceFragment(),
     private var backupJob: Job? = null
     private var restoreJob: Job? = null
     private var backupLocalOnly = false
+    private var restorePolicy = RestorePolicy.Merge
 
     private fun updateWaitDialog(prefix: String, itemName: String) {
         listView.post {
@@ -110,7 +112,7 @@ class BackupConfigFragment : PreferenceFragment(),
                 waitDialog.setText(getString(R.string.fvd_restoring))
                 waitDialog.show()
                 val task = Coroutine.async {
-                    Restore.restore(appCtx, uri) { itemName ->
+                    Restore.restore(appCtx, uri, restorePolicy) { itemName ->
                         updateWaitDialog(getString(R.string.restore), itemName)
                     }
                 }.onFinally {
@@ -264,7 +266,7 @@ class BackupConfigFragment : PreferenceFragment(),
             "backup_selector" -> showBackupSelector()
             "book_cache_selector" -> showBookCacheSelector()
             "web_dav_backup" -> backup()
-            "web_dav_restore" -> restore()
+            "web_dav_restore" -> chooseRestorePolicy { restore() }
             "import_old" -> restoreOld.launch()
             "viewBackupInfo" -> showBackupInfo()
             "viewRestoreInfo" -> showRestoreInfo()
@@ -447,11 +449,11 @@ class BackupConfigFragment : PreferenceFragment(),
             AppWebDav.downloadAndUnzipBackup(name)
         }.onSuccess {
             if (AppConfig.restoreShowSelector) {
-                showRestoreSelectorFromPath(Backup.backupPath)
+                showRestoreSelectorFromPath(Backup.backupPath, restorePolicy)
             } else {
                 waitDialog.setText(getString(R.string.fvd_restoring))
                 val restoreTask = Coroutine.async {
-                    Restore.restoreLocked(Backup.backupPath) { itemName ->
+                    Restore.restoreLocked(Backup.backupPath, restorePolicy) { itemName ->
                         updateWaitDialog(getString(R.string.restore), itemName)
                     }
                 }.onFinally {
@@ -472,10 +474,39 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     private fun restoreFromLocal() {
-        restoreDoc.launch {
-            title = getString(R.string.select_restore_file)
-            mode = HandleFileContract.FILE
-            allowExtensions = arrayOf("zip")
+        chooseRestorePolicy {
+            restoreDoc.launch {
+                title = getString(R.string.select_restore_file)
+                mode = HandleFileContract.FILE
+                allowExtensions = arrayOf("zip")
+            }
+        }
+    }
+
+    /**
+     * 选择恢复策略：默认合并（只补不删）；覆盖需要二次确认。
+     */
+    private fun chooseRestorePolicy(onReady: () -> Unit) {
+        val policyItems = arrayOf(
+            getString(R.string.restore_policy_merge),
+            getString(R.string.restore_policy_replace),
+        )
+        alert {
+            setTitle(R.string.restore_policy_title)
+            items(policyItems.toList()) { _, index ->
+                if (index == 0) {
+                    restorePolicy = RestorePolicy.Merge
+                    onReady()
+                } else {
+                    alert(R.string.restore_policy_title, R.string.restore_policy_replace_confirm) {
+                        okButton {
+                            restorePolicy = RestorePolicy.Replace
+                            onReady()
+                        }
+                        cancelButton()
+                    }
+                }
+            }
         }
     }
 
@@ -501,7 +532,7 @@ class BackupConfigFragment : PreferenceFragment(),
                     }
                 }
 
-                showRestoreSelectorFromPath(tempPath)
+                showRestoreSelectorFromPath(tempPath, restorePolicy)
             } catch (e: Exception) {
                 waitDialog.dismiss()
                 AppLog.put("读取备份文件出错\n${e.localizedMessage}", e)
@@ -513,12 +544,15 @@ class BackupConfigFragment : PreferenceFragment(),
     /**
      * 从已解压的目录显示恢复文件选择器
      */
-    private fun showRestoreSelectorFromPath(tempPath: String) {
+    private fun showRestoreSelectorFromPath(
+        tempPath: String,
+        policy: RestorePolicy = restorePolicy,
+    ) {
         // 选择器自身有独立的进度弹窗，这里必须收起等待框，
         // 否则用户取消选择器后「读取备份文件…」会一直留在屏幕上
         waitDialog.dismiss()
         showDialogFragment(
-            RestoreFileSelectorDialogFragment.newInstance(tempPath)
+            RestoreFileSelectorDialogFragment.newInstance(tempPath, policy)
         )
     }
 
