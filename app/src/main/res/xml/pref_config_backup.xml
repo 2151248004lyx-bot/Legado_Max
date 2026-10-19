@@ -165,7 +165,7 @@
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.NameListPreference
-            android:defaultValue="5"
+            android:defaultValue="0"
             android:key="backupKeepCount"
             android:summary="@string/backup_keep_count_s"
             android:title="@string/backup_keep_count_t"

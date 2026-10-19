@@ -137,8 +137,13 @@ object Backup {
     private const val TAG = "Backup"
     private const val READ_BG_DIR = "bg"
 
-    /** 互斥锁，防止并发备份操作 */
-    private val mutex = Mutex()
+    /**
+     * 备份/恢复共用的工作区锁。
+     *
+     * 两者都使用 `files/backup` 与 `tmp_backup.zip`，必须互斥；
+     * 恢复期间调用 [createSnapshot] 时不要再取锁，避免同一协程重入死锁。
+     */
+    internal val workMutex = Mutex()
 
     /** 备份文件名列表，定义所有需要备份的文件 */
     private val backupFileNames by lazy {
@@ -430,7 +435,7 @@ object Backup {
     fun autoBack(context: Context) {
         if (shouldBackup()) {
             Coroutine.async {
-                mutex.withLock {
+                workMutex.withLock {
                     if (shouldBackup()) {
                         runBackup(context, AppConfig.backupPath, localOnly = false, onProgress = null)
                     }
@@ -455,7 +460,7 @@ object Backup {
         localOnly: Boolean = false,
         onProgress: ((String) -> Unit)? = null
     ) {
-        mutex.withLock {
+        workMutex.withLock {
             withContext(IO) {
                 runBackup(context, path, localOnly, onProgress)
             }
@@ -1167,7 +1172,8 @@ object Backup {
      * 快照本身是合法备份包（带 manifest），可直接通过恢复流程回滚。
      */
     suspend fun createSnapshot(onProgress: ((String) -> Unit)? = null): File? {
-        return mutex.withLock {
+        // 调用方（Restore）已持有 workMutex，这里不能再取锁（Mutex 不可重入）
+        return run {
             val staging = appCtx.filesDir.getFile("pre_restore_stage")
             FileUtils.delete(staging)
             staging.createFolderIfNotExist()
@@ -1247,7 +1253,8 @@ object Backup {
     private fun cleanupLocalBackups(path: String, keep: Int, onlyLatest: Boolean) {
         val dir = File(path).takeIf { it.isDirectory } ?: return
         val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
-        val max = if (onlyLatest) 0 else keep.coerceAtLeast(1)
+        if (!onlyLatest && keep <= 0) return
+        val max = if (onlyLatest) 0 else keep
         dir.listFiles()
             ?.filter { it.isFile && it.name.startsWith("backup") && it.name.endsWith(".zip") }
             ?.filter { !it.name.startsWith("backup-latest") }

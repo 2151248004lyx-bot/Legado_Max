@@ -14,6 +14,7 @@ import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.BackupCrypto
 import io.legado.app.help.storage.BackupManifest
 import io.legado.app.help.storage.Restore
+import io.legado.app.help.storage.RestorePolicy
 import io.legado.app.lib.webdav.Authorization
 import io.legado.app.lib.webdav.WebDav
 import io.legado.app.lib.webdav.WebDavException
@@ -228,9 +229,9 @@ object AppWebDav {
      * @throws WebDavException 下载或恢复失败时抛出异常
      */
     @Throws(WebDavException::class)
-    suspend fun restoreWebDav(name: String) {
+    suspend fun restoreWebDav(name: String, policy: RestorePolicy = RestorePolicy.Merge) {
         downloadAndUnzipBackup(name)
-        Restore.restoreLocked(Backup.backupPath)
+        Restore.restoreLocked(Backup.backupPath, policy)
     }
 
     /**
@@ -343,7 +344,8 @@ object AppWebDav {
      * 固定名（backup-latest-*）永不删除。
      */
     private suspend fun cleanupOldBackups() {
-        val keep = AppConfig.backupKeepCount.coerceAtLeast(1)
+        val keep = AppConfig.backupKeepCount
+        if (keep <= 0) return
         val deviceName = AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
         val files = runCatching { WebDav(rootWebDavUrl, authorization!!).listFiles() }
             .getOrNull()

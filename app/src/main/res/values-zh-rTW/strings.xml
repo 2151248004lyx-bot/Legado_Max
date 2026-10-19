@@ -2228,7 +2228,7 @@
     <string name="backup_password_t">備份密碼</string>
     <string name="backup_password_s">用於加密上傳到 WebDAV 的備份包與敏感設定，留空則加密不生效</string>
     <string name="backup_password_unset">未設定</string>
-    <string name="backup_keep_count_s">雲端與本機每台裝置保留的份數</string>
+    <string name="backup_keep_count_s">雲端與本機每台裝置保留的份數；0 = 不限制</string>
     <string name="backup_encrypt_t">加密備份包</string>
     <string name="backup_encrypt_s">僅對上傳到 WebDAV 的備份包使用 AES-GCM 加密，需先設定備份密碼</string>
     <string name="backup_keep_count_t">保留最近備份數</string>

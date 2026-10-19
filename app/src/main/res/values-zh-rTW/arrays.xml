@@ -30,12 +30,14 @@
         <item>從不讀取</item>
     </string-array>
     <string-array name="backup_keep_count_entries">
+        <item>不限制</item>
         <item>3</item>
         <item>5</item>
         <item>10</item>
         <item>30</item>
     </string-array>
     <string-array name="backup_keep_count_values">
+        <item>0</item>
         <item>3</item>
         <item>5</item>
         <item>10</item>

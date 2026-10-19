@@ -964,8 +964,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     /** 整包加密，默认关闭（保留手动解压查看能力）。 */
     val backupEncrypt get() = appCtx.getPrefBoolean(PreferKey.backupEncrypt, false)
 
-    /** 保留的备份份数（按设备分组）。 */
-    val backupKeepCount get() = appCtx.getPrefInt(PreferKey.backupKeepCount, 5)
+    /** 保留的备份份数（按设备分组）；0 表示不限制，保持旧版可无限备份的行为。 */
+    val backupKeepCount get() = appCtx.getPrefInt(PreferKey.backupKeepCount, 0)
 
     val defaultHomePage get() = appCtx.getPrefString(PreferKey.defaultHomePage, "bookshelf") ?: "bookshelf"
 

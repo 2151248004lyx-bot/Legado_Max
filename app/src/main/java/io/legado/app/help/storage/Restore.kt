@@ -121,8 +121,7 @@ object Restore {
     private const val bookCacheIndexFileName = "bookCacheIndex.json"
     private const val bookCacheBooksFileName = "bookCacheBooks.json"
 
-    /** 互斥锁，防止并发恢复操作 */
-    private val mutex = Mutex()
+
 
     private const val TAG = "Restore"
     private val themeRestorePrefKeys = arrayOf(
@@ -209,7 +208,7 @@ object Restore {
         policy: RestorePolicy = RestorePolicy.fromKey(AppConfig.restorePolicyKey),
         onProgress: ((String) -> Unit)? = null,
     ) {
-        mutex.withLock {
+        Backup.workMutex.withLock {
             executeRestore(path, null, policy, onProgress)
         }
     }
@@ -227,7 +226,7 @@ object Restore {
         onProgress: ((String) -> Unit)? = null,
     ) {
         LogUtils.d(TAG, "开始选择性恢复 path:$path files:${selectedFiles.joinToString()} policy:${policy.key}")
-        mutex.withLock {
+        Backup.workMutex.withLock {
             try {
                 executeRestore(path, selectedFiles.toSet(), policy, onProgress)
             } catch (e: Exception) {
