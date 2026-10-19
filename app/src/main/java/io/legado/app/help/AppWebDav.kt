@@ -12,6 +12,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.BackupCrypto
+import io.legado.app.help.storage.BackupManifest
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.webdav.Authorization
 import io.legado.app.lib.webdav.WebDav
@@ -279,6 +280,14 @@ object AppWebDav {
     suspend fun backUpWebDav(fileName: String) {
         if (!NetworkUtils.isAvailable()) return
         val authorization = authorization ?: return
+        val manifest = BackupManifest.read(File(Backup.backupPath, BackupManifest.FILE_NAME))
+        // 内容签名与云端最新备份一致时跳过上传（典型场景：数据没有变化的重复备份）
+        val unchanged = manifest != null &&
+            runCatching { latestManifestSignature() }.getOrNull() == manifest.contentSignature()
+        if (unchanged) {
+            AppLog.put("备份内容未变化，跳过云端上传")
+            return
+        }
         val zipFile = File(Backup.zipFilePath)
         var uploadFile = zipFile
         var encryptedTemp: File? = null
@@ -295,10 +304,35 @@ object AppWebDav {
             }
             val putUrl = "$rootWebDavUrl$fileName"
             WebDav(putUrl, authorization).upload(uploadFile)
+            manifest?.let { uploadManifest(fileName, it) }
         } finally {
             encryptedTemp?.let { FileUtils.delete(it.absolutePath) }
         }
         cleanupOldBackups()
+    }
+
+    /**
+     * 单独上传清单小文件，供下次备份做增量判断与恢复前摘要展示。
+     */
+    private suspend fun uploadManifest(zipFileName: String, manifest: BackupManifest) {
+        val authorization = authorization ?: return
+        val name = "$zipFileName.manifest.json"
+        WebDav(rootWebDavUrl + name, authorization)
+            .upload(GSON.toJson(manifest).toByteArray(), "application/json")
+    }
+
+    /**
+     * 读取云端最新的清单签名；无清单（旧版本上传）时返回 null。
+     */
+    private suspend fun latestManifestSignature(): String? {
+        val authorization = authorization ?: return null
+        if (!NetworkUtils.isAvailable()) return null
+        val latest = WebDav(rootWebDavUrl, authorization).listFiles()
+            .filter { it.displayName.startsWith("backup") && it.displayName.endsWith(".manifest.json") }
+            .maxByOrNull { it.lastModify }
+            ?: return null
+        val bytes = WebDav(rootWebDavUrl + latest.displayName, authorization).download()
+        return GSON.fromJsonObject<BackupManifest>(String(bytes)).getOrNull()?.contentSignature()
     }
 
     /**
@@ -311,12 +345,18 @@ object AppWebDav {
         val files = runCatching { WebDav(rootWebDavUrl, authorization!!).listFiles() }
             .getOrNull()
             ?: return
-        files.asSequence()
-            .filter { it.displayName.startsWith("backup") && it.displayName.endsWith(".zip") }
+        // 按"基础名"分组：backup-x.zip 与 backup-x.zip.manifest.json 视为同一份备份
+        files.filter { it.displayName.startsWith("backup") }
             .filter { !it.displayName.startsWith("backup-latest") }
             .filter { deviceName == null || it.displayName.contains(deviceName) }
-            .sortedByDescending { it.lastModify }
+            .filter {
+                it.displayName.endsWith(".zip") || it.displayName.endsWith(".manifest.json")
+            }
+            .groupBy { it.displayName.baseBackupName() }
+            .entries
+            .sortedByDescending { (_, list) -> list.maxOf { it.lastModify } }
             .drop(keep)
+            .flatMap { it.value }
             .forEach { old ->
                 runCatching {
                     WebDav(rootWebDavUrl + old.displayName, authorization!!).delete()
@@ -326,6 +366,9 @@ object AppWebDav {
                 }
             }
     }
+
+    private fun String.baseBackupName(): String =
+        removeSuffix(".manifest.json").removeSuffix(".zip")
 
     // ==================== 封面图集同步 ====================
 

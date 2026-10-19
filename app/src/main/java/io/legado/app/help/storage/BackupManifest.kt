@@ -50,6 +50,19 @@ data class BackupManifest(
 
     fun findVolume(name: String): BackupManifestEntry? = volumes.firstOrNull { it.name == name }
 
+    /**
+     * 内容签名：条目名 + 大小 + CRC 的摘要。
+     *
+     * 用于云端增量判断——签名相同说明备份内容没有变化，可以跳过上传。
+     */
+    fun contentSignature(): String {
+        val text = entries.sortedBy { it.name }
+            .joinToString("|") { "${it.name}:${it.size}:${it.crc32}" }
+        val digest = java.security.MessageDigest.getInstance("MD5")
+            .digest(text.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
     companion object {
 
         const val FILE_NAME = "manifest.json"
