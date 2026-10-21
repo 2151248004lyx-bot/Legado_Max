@@ -1181,6 +1181,13 @@
     <string name="preview_title_format">Preview: %s</string>
     <string name="title_font_size">Font size</string>
     <string name="title_margin_top">Margin top</string>
+    <string name="title_split_mode">Title split mode</string>
+    <string name="title_split_value">Split content</string>
+    <string name="title_split_hint_position">Number, e.g. 5</string>
+    <string name="title_split_hint_mark">Characters, split at every match</string>
+    <string name="title_split_hint_regex">Regular expression</string>
+    <string name="title_sub_font_size">Sub-line font size</string>
+    <string name="title_line_spacing">Title line spacing</string>
     <string name="title_margin_bottom">Margin bottom</string>
     <string name="show">Show</string>
     <string name="hide">Hide</string>
