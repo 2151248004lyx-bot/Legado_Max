@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 选集面板：右侧贴边、全高列表。
+     标题条占满宽度并居中，列表项左右边距对称——之前标题 wrap_content 左对齐 +
+     列表 marginEnd 16dp，面板右上角会空出一块没有内容的区域，看着像留白缺口。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,11 +11,11 @@
 
     <TextView
         android:id="@+id/listCount"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
         android:gravity="center"
-        android:minEms="2"
         android:text="选集"
         android:textColor="#88ffffff" />
 
@@ -20,12 +23,12 @@
         android:id="@+id/switch_dialog_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
         android:background="@null"
         android:cacheColorHint="#00000000"
         android:divider="#00000000"
         android:dividerHeight="4dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="16dp"
         android:listSelector="#00000000" />
 
 </LinearLayout>

@@ -3,7 +3,7 @@
     android:id="@+id/text1"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/card_video_background"
+    android:background="@drawable/bg_video_panel_item"
     android:gravity="center_vertical"
     android:paddingLeft="15dp"
     android:paddingTop="10dp"

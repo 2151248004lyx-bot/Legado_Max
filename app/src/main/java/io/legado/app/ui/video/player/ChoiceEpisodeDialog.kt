@@ -5,7 +5,6 @@ import android.app.Dialog
 import android.content.Context
 import android.widget.TextView
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.AdapterView
@@ -25,6 +24,9 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
 
     private var data: List<BookChapter>? = null
 
+    /** 播放器实测高度：面板高度以它为上限，避免超出可用区域 */
+    private var panelHeight = 0
+
     interface OnListItemClickListener {
         fun onItemClick(position: Int)
         fun finishDialog()
@@ -34,19 +36,41 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
         super.onCreate(savedInstanceState)
     }
 
+    /**
+     * 窗口参数必须在 show() 之后再次应用：Dialog.show() 内部会按 decor 重新下发
+     * LayoutParams，把 initList 里设好的贴顶/layoutInScreen 覆盖回去——这就是
+     * "贴顶不生效、顶部始终空一条状态栏"的原因。
+     */
+    override fun onStart() {
+        super.onStart()
+        applyPanelWindow()
+    }
+
     override fun onStop() {
         onItemClickListener!!.finishDialog()
         super.onStop()
+    }
+
+    private fun applyPanelWindow() {
+        val d = mContext.resources.displayMetrics
+        applyVideoPanelWindow(
+            (d.widthPixels * 0.4).toInt(),
+            if (panelHeight > 0) panelHeight else d.heightPixels
+        )
     }
 
     @SuppressLint("SetTextI18n")
     fun initList(
         data: List<BookChapter>,
         onItemClickListener: OnListItemClickListener,
-        initialSelection: Int = -1
+        initialSelection: Int = -1,
+        /** 播放器可视高度（px）：沉浸式下 displayMetrics.heightPixels 含系统栏区域，
+         *  直接拿它当窗口高度会让窗口偏高、被垂直居中裁掉首尾各一截。 */
+        usableHeight: Int = 0
     ) {
         this.onItemClickListener = onItemClickListener
         this.data = data
+        this.panelHeight = usableHeight
         val inflater = LayoutInflater.from(mContext)
         val view: View = inflater.inflate(R.layout.switch_episode_video_dialog, null)
         view.findViewById<TextView>(R.id.listCount).text = "选集（${data.size}）"
@@ -58,13 +82,7 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
             listView!!.setSelectionFromTop(initialSelection, 0)
         }
         listView!!.onItemClickListener = this@ChoiceEpisodeDialog.OnItemClickListener()
-        val dialogWindow = window
-        val lp = dialogWindow!!.attributes
-        val d = mContext.resources.displayMetrics // 获取屏幕宽、高用
-        lp.width = (d.widthPixels * 0.4).toInt() // 宽度设置为屏幕的0.4
-        lp.height = d.heightPixels
-        lp.gravity = Gravity.END // 设置靠右对齐
-        dialogWindow.setAttributes(lp)
+        applyPanelWindow()
     }
 
     private inner class OnItemClickListener : AdapterView.OnItemClickListener {
