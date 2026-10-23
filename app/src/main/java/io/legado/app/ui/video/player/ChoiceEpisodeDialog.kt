@@ -3,7 +3,6 @@ package io.legado.app.ui.video.player
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.Context
-import android.widget.TextView
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -53,8 +52,10 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
 
     private fun applyPanelWindow() {
         val d = mContext.resources.displayMetrics
+        //宽度取 30%：面板已是"纯文字一列"的样式，过宽会让右侧留出大片空白，
+        //与参考样式那种细窄侧栏不符；30% 仍能容纳"1上 某人的梦（上）"这类较长标题
         applyVideoPanelWindow(
-            (d.widthPixels * 0.4).toInt(),
+            (d.widthPixels * 0.30).toInt(),
             if (panelHeight > 0) panelHeight else d.heightPixels
         )
     }
@@ -73,7 +74,6 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
         this.panelHeight = usableHeight
         val inflater = LayoutInflater.from(mContext)
         val view: View = inflater.inflate(R.layout.switch_episode_video_dialog, null)
-        view.findViewById<TextView>(R.id.listCount).text = "选集（${data.size}）"
         listView = view.findViewById(R.id.switch_dialog_list)
         setContentView(view)
         adapter = SwitchVideoAdapter(mContext, data) { item -> item.title }

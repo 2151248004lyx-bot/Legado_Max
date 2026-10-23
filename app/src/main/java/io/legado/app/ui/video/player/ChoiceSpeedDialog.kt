@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.AdapterView
-import android.widget.TextView
 import android.widget.ArrayAdapter
 import android.widget.ListView
 import io.legado.app.R
@@ -52,8 +51,9 @@ class ChoiceSpeedDialog(private val mContext: Context) : Dialog(
 
     private fun applyPanelWindow() {
         val d = mContext.resources.displayMetrics
+        //与选集面板同宽（30%）：倍速档位只有 "1.0X" 这类短文本，过宽会显得很空
         applyVideoPanelWindow(
-            (d.widthPixels * 0.4).toInt(),
+            (d.widthPixels * 0.30).toInt(),
             if (panelHeight > 0) panelHeight else d.heightPixels
         )
     }
@@ -72,8 +72,6 @@ class ChoiceSpeedDialog(private val mContext: Context) : Dialog(
         this.panelHeight = usableHeight
         val inflater = LayoutInflater.from(mContext)
         val view: View = inflater.inflate(R.layout.switch_speed_video_dialog, null)
-        //与选集面板同款标题条：倍速是选档操作，顶上要有个说明，否则右侧一条纯列表很突兀
-        view.findViewById<TextView>(R.id.listCount).text = "倍速"
         listView = view.findViewById(R.id.switch_dialog_list)
         setContentView(view)
         //当前档位高亮：标明正在生效的倍速（面板关闭前一直显示）

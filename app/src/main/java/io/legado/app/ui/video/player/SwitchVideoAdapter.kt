@@ -1,7 +1,7 @@
 package io.legado.app.ui.video.player
 
 import android.content.Context
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Typeface
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,6 +10,16 @@ import android.widget.TextView
 import io.legado.app.R
 import io.legado.app.lib.theme.accentColor
 
+/**
+ * 选集 / 倍速面板的列表适配器（纯文字样式）。
+ *
+ * 视觉口径：**没有卡片背景、没有描边**，只有一行行文字叠在画面上；
+ * 文字统一使用**阅读主题色**（与 App 其它地方的强调色一致），当前项更亮更粗。
+ *
+ * 为什么用"亮度/字重"而不是"背景色块"来表达选中：
+ * 面板容器是透明的，画面上任何底色块都会显出生硬的矩形边界；
+ * 而参考样式本身就是靠文字层级区分，这样在亮/暗画面上都更稳。
+ */
 class SwitchVideoAdapter<T>(
     context: Context,
     private val dataList: List<T>,
@@ -24,7 +34,17 @@ class SwitchVideoAdapter<T>(
         }
 
     private val accentColor: Int by lazy { context.accentColor }
-    private val cornerRadius: Float by lazy { 8 * context.resources.displayMetrics.density }
+
+    /**
+     * 未选中项：主题色压暗到 55% 亮度，保证在明亮画面上依然可读、又不抢画面；
+     * 选中项：主题色原色 + 加粗，一眼能看出当前档位/当前集。
+     */
+    private val normalColor: Int by lazy {
+        val r = (accentColor shr 16 and 0xFF) * 0.75f
+        val g = (accentColor shr 8 and 0xFF) * 0.75f
+        val b = (accentColor and 0xFF) * 0.75f
+        (0xFF shl 24) or (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
+    }
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val view = convertView ?: LayoutInflater.from(context)
@@ -32,22 +52,13 @@ class SwitchVideoAdapter<T>(
         val textView = view.findViewById<TextView>(R.id.text1)
         val item = dataList[position]
         textView.text = titleProvider(item)
-        //选中项：主题色文字 + 主题色半透明底/描边，与播放器其它选中态同一口径。
-        //背景用代码生成，避免 ..._selected.xml 里 ?attr/colorPrimary + item:alpha
-        //在低版本上被忽略（minSdk 23 的部分机型不认 item 的 android:alpha）
         val selected = selectedValue != null && selectedValue == item
         if (selected) {
             textView.setTextColor(accentColor)
-            //GradientDrawable 同时有 setColor(int)/setColor(ColorStateList) 两个重载，
-            //Kotlin 的 color 属性会被推断成 ColorStateList 版本，必须显式调 setColor(Int)
-            textView.background = GradientDrawable().apply {
-                setColor((accentColor and 0x00FFFFFF) or (0x47 shl 24)) // 主题色 28% 透明度
-                cornerRadius = this@SwitchVideoAdapter.cornerRadius
-                setStroke(1, accentColor)
-            }
+            textView.setTypeface(null, Typeface.BOLD)
         } else {
-            textView.setTextColor(context.getColor(R.color.video_ctrl_text_primary))
-            textView.setBackgroundResource(R.drawable.bg_video_panel_item)
+            textView.setTextColor(normalColor)
+            textView.setTypeface(null, Typeface.NORMAL)
         }
         return view
     }
