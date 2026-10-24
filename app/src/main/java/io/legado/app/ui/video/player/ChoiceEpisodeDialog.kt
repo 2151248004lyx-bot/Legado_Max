@@ -52,10 +52,11 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
 
     private fun applyPanelWindow() {
         val d = mContext.resources.displayMetrics
-        //宽度取 30%：面板已是"纯文字一列"的样式，过宽会让右侧留出大片空白，
-        //与参考样式那种细窄侧栏不符；30% 仍能容纳"1上 某人的梦（上）"这类较长标题
+        //宽度取 45%（原 30% 的 1.5 倍）：选集标题普遍较长（如"1上 某人的梦（上）【会员】"），
+        //30% 下会被省略得看不出是哪一集；加宽后一屏内标题更完整。
+        //倍速面板仍保持 30% —— 它只有 "1.0X" 这类短文本，加宽反而显得空。
         applyVideoPanelWindow(
-            (d.widthPixels * 0.30).toInt(),
+            (d.widthPixels * 0.45).toInt(),
             if (panelHeight > 0) panelHeight else d.heightPixels
         )
     }
