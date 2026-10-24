@@ -76,9 +76,17 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
         val view: View = inflater.inflate(R.layout.switch_episode_video_dialog, null)
         listView = view.findViewById(R.id.switch_dialog_list)
         setContentView(view)
-        adapter = SwitchVideoAdapter(mContext, data) { item -> item.title }
+        //与倍速面板保持一致：把「当前集」交给适配器，由它用主题色 + 加粗标出。
+        //之前这里只调 setSelectionFromTop 滚动到当前项，并没有设置 selectedValue，
+        //所以当前集在视觉上和其它集没有区别（只有位置不同）。
+        val hasSelection = initialSelection >= 0 && initialSelection < data.size
+        val switchAdapter = SwitchVideoAdapter(mContext, data) { item -> item.title }
+        if (hasSelection) {
+            switchAdapter.selectedValue = data[initialSelection]
+        }
+        adapter = switchAdapter
         listView!!.setAdapter(adapter)
-        if (initialSelection >= 0 && initialSelection < data.size) {
+        if (hasSelection) {
             listView!!.setSelectionFromTop(initialSelection, 0)
         }
         listView!!.onItemClickListener = this@ChoiceEpisodeDialog.OnItemClickListener()
