@@ -54,6 +54,8 @@ class VideoPlayer: StandardGSYVideoPlayer {
     private var playSpeed: Float = 1.0f
     private var btnNext: ImageView? = null
     private var btnPrev: ImageView? = null
+    /** 横屏底栏的小窗按钮：竖屏全屏（竖屏视频全屏播放）时隐藏 */
+    private var btnPip: ImageView? = null
     private var btnSettings: ImageView? = null
     private var tipView: TextView? = null
 
@@ -356,6 +358,8 @@ class VideoPlayer: StandardGSYVideoPlayer {
         skipOutroTriggered = false
         //R5：切集起播后刷新上一集按钮置灰状态
         updatePrevButtonState()
+        //竖屏全屏时隐藏小窗按钮（视频本身是竖屏时全屏播放用不上小窗）
+        updatePipButtonState()
         // 跳过片头：仅在非续播（seekOnStart 为 0）且开启跳过片头时生效
         if (VideoPlay.skipIntroOutroEnabled && VideoPlay.skipIntroSeconds > 0
             && seekOnStart <= 0
@@ -506,7 +510,8 @@ class VideoPlayer: StandardGSYVideoPlayer {
         //R5：上一集按钮（仅横屏布局存在；竖屏布局无此 id，findViewById 为 null 天然不生效）
         btnPrev = findViewById(R.id.prev)
         //R7：横屏小窗按钮（与竖屏标题栏菜单共用 onFloatWindowClick 入口）
-        findViewById<View>(R.id.iv_float_window)?.setOnClickListener {
+        btnPip = findViewById(R.id.iv_float_window)
+        btnPip?.setOnClickListener {
             onFloatWindowClick?.invoke()
         }
         if (VideoPlay.episodes == null) {
@@ -527,6 +532,7 @@ class VideoPlayer: StandardGSYVideoPlayer {
             VideoPlay.upDurIndex(-1, this)
         }
         updatePrevButtonState()
+        updatePipButtonState()
     }
 
     /**
@@ -547,6 +553,23 @@ class VideoPlayer: StandardGSYVideoPlayer {
             it.isEnabled = !atLast
             it.alpha = if (atLast) 0.4f else 1f
         }
+    }
+
+    /**
+     * 小窗按钮的显隐：竖屏全屏时隐藏。
+     *
+     * 背景：横屏与竖屏全屏共用 `video_layout_controller_full` 布局，
+     * 但按钮只在"横屏全屏"下有意义 —— 视频本身是竖屏（`isPortraitVideo`）时，
+     * 全屏播放的画面本身就是竖向的，再切小窗没有收益，反而占着底栏位置。
+     *
+     * 为什么在 onPrepared 里调：`isPortraitVideo` 要等拿到视频宽高（aspectRatio > 1.2）
+     * 才知道，initView 时该值还是 false，那时隐藏会误伤横屏视频。
+     */
+    private fun updatePipButtonState() {
+        if (btnPip == null) {
+            btnPip = findViewById(R.id.iv_float_window)
+        }
+        btnPip?.visibility = if (VideoPlay.isPortraitVideo) View.GONE else View.VISIBLE
     }
 
     /**
