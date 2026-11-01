@@ -166,4 +166,4 @@ jobs:
           for PID in "${PIDS[@]}"; do
             wait $PID
           done
-          echo "✅ 所有APK上传完成"
+          echo "✅ 所有APK上传完成"。
