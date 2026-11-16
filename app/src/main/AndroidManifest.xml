@@ -737,6 +737,62 @@
         <meta-data
             android:name="channel"
             android:value="${APP_CHANNEL_VALUE}" />
+    
+        <!-- ===== NG 追加组件 ===== -->
+        <activity
+                    android:name=".ui.book.bgm.BgmActivity"
+                    android:exported="false"
+                    android:configChanges="orientation|screenSize"
+                    android:hardwareAccelerated="true" />
+        <activity
+                    android:name=".ui.book.bgm.BgmLocalImportActivity"
+                    android:exported="false"
+                    android:configChanges="orientation|screenSize"
+                    android:hardwareAccelerated="true" />
+        <activity
+                    android:name=".ui.book.character.BookCharacterActivity"
+                    android:launchMode="singleTop" />
+        <activity
+                    android:name=".ui.book.character.BookCharacterTtsActivity"
+                    android:launchMode="singleTop" />
+        <activity
+                    android:name=".ui.book.character.BookStoryboardActivity"
+                    android:launchMode="singleTop" />
+        <activity
+                    android:name=".ui.book.read.aloud.ReadAloudPlayerActivity"
+                    android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+                    android:exported="false"
+                    android:launchMode="singleTop" />
+        <activity
+                    android:name=".ui.book.source.edit.JsSourceEditActivity"
+                    android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+                    android:launchMode="singleTask"
+                    android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+                    android:name=".ui.book.source.manage.BookSourceCheckActivity"
+                    android:launchMode="singleTop"
+                    android:screenOrientation="behind" />
+        <activity
+                    android:name=".ui.config.AiChatActivity"
+                    android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+                    android:name=".ui.file.BuiltInFilePickerActivity"
+                    android:configChanges="orientation|screenSize"
+                    android:hardwareAccelerated="true"
+                    android:theme="@style/AppTheme.Transparent" />
+        <activity
+                    android:name=".ui.pet.PetManagerActivity"
+                    android:exported="false"
+                    android:configChanges="orientation|screenSize"
+                    android:hardwareAccelerated="true" />
+        <activity
+                    android:name=".ui.resource.ResourceCenterActivity"
+                    android:exported="false"
+                    android:configChanges="orientation|screenSize"
+                    android:hardwareAccelerated="true" />
+        <service
+                    android:name=".service.McpService"
+                    android:foregroundServiceType="dataSync" />
     </application>
 
     <queries>

@@ -9,8 +9,14 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import io.legado.app.data.dao.AiChatDao
+import io.legado.app.data.dao.AiSkillDao
+import io.legado.app.data.dao.AgentMemoryDao
+import io.legado.app.data.dao.AgentToolResultDao
 import io.legado.app.data.dao.AutoTaskRuleDao
 import io.legado.app.data.dao.BookChapterDao
+import io.legado.app.data.dao.BookCharacterDao
+import io.legado.app.data.dao.BookUpdateDao
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookGroupDao
 import io.legado.app.data.dao.BookSourceDao
@@ -18,6 +24,7 @@ import io.legado.app.data.dao.BookmarkDao
 import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.dao.CookieDao
 import io.legado.app.data.dao.CoverGalleryDao
+import io.legado.app.data.dao.DailyReadingRecordDao
 import io.legado.app.data.dao.DictRuleDao
 import io.legado.app.data.dao.HomepageCustomSetDao
 import io.legado.app.data.dao.HomepageModuleDao
@@ -29,32 +36,52 @@ import io.legado.app.data.dao.RssArticleDao
 import io.legado.app.data.dao.RssReadRecordDao
 import io.legado.app.data.dao.RssSourceDao
 import io.legado.app.data.dao.RssStarDao
+import io.legado.app.data.dao.ReadingTimeTotalDao
 import io.legado.app.data.dao.RuleSubDao
 import io.legado.app.data.dao.SearchBookDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.SourceRecycleBinDao
+import io.legado.app.data.dao.TtsEngineRuntimeDao
+import io.legado.app.data.dao.TtsVoiceDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.dao.UrlRecordDao
 import io.legado.app.data.dao.DirectLinkUploadRuleDao
 import io.legado.app.data.dao.UploadHistoryDao
+import io.legado.app.data.entities.AgentMemory
+import io.legado.app.data.entities.AgentToolExecutionIntent
+import io.legado.app.data.entities.AgentToolReceiptAcknowledgement
+import io.legado.app.data.entities.AgentToolResultArtifact
+import io.legado.app.data.entities.AiChatConversation
+import io.legado.app.data.entities.AiChatMessageNode
+import io.legado.app.data.entities.AiSkill
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookCharacter
+import io.legado.app.data.entities.BookCharacterProfile
+import io.legado.app.data.entities.BookCharacterTtsBinding
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.data.entities.BookTtsCastRole
+import io.legado.app.data.entities.BookTtsCastRoleContribution
+import io.legado.app.data.entities.BookUpdate
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.Cookie
 import io.legado.app.data.entities.CoverGalleryGroup
 import io.legado.app.data.entities.CoverGalleryImage
+import io.legado.app.data.entities.DailyReadingRecord
 import io.legado.app.data.entities.DictRule
 import io.legado.app.data.entities.DirectLinkUploadRule
 import io.legado.app.data.entities.HomepageCustomSet
 import io.legado.app.data.entities.HomepageModule
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.KeyboardAssist
+import io.legado.app.data.entities.ReadingTimeTotal
 import io.legado.app.data.entities.ReplaceRule
+import io.legado.app.data.entities.TtsEngineRuntimeEntity
+import io.legado.app.data.entities.TtsVoiceEntity
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
@@ -85,7 +112,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 103,
+    version = 104,
     exportSchema = true,
     entities = [
         Book::class, BookGroup::class, BookSource::class, BookChapter::class,
@@ -98,6 +125,13 @@ val appDb by lazy {
         CoverGalleryGroup::class, CoverGalleryImage::class, SourceRecycleBin::class,
         HomepageModule::class, HomepageCustomSet::class,
         AutoTaskRule::class,
+        BookCharacterProfile::class, BookCharacter::class, BookCharacterTtsBinding::class,
+        BookTtsCastRole::class, BookTtsCastRoleContribution::class,
+        AiChatConversation::class, AiChatMessageNode::class, AiSkill::class,
+        AgentMemory::class, AgentToolResultArtifact::class,
+        AgentToolExecutionIntent::class, AgentToolReceiptAcknowledgement::class,
+        TtsVoiceEntity::class, TtsEngineRuntimeEntity::class,
+        DailyReadingRecord::class, ReadingTimeTotal::class, BookUpdate::class,
     ],
     views = [BookSourcePart::class],
     autoMigrations = [
@@ -157,6 +191,8 @@ val appDb by lazy {
         AutoMigration(from = 100, to = 101),
         // 103：auto_task_rules 定时任务规则表，自动迁移
         AutoMigration(from = 102, to = 103),
+        // 104：追加 NG 的 AI/朗读/角色/阅读统计等新表，仅 CREATE 新表，不改动旧表
+        AutoMigration(from = 103, to = 104),
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -190,6 +226,16 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val homepageModuleDao: HomepageModuleDao
     abstract val homepageCustomSetDao: HomepageCustomSetDao
     abstract val autoTaskRuleDao: AutoTaskRuleDao
+    abstract val bookUpdateDao: BookUpdateDao
+    abstract val bookCharacterDao: BookCharacterDao
+    abstract val dailyReadingRecordDao: DailyReadingRecordDao
+    abstract val readingTimeTotalDao: ReadingTimeTotalDao
+    abstract val aiChatDao: AiChatDao
+    abstract val aiSkillDao: AiSkillDao
+    abstract val agentMemoryDao: AgentMemoryDao
+    abstract val agentToolResultDao: AgentToolResultDao
+    abstract val ttsVoiceDao: TtsVoiceDao
+    abstract val ttsEngineRuntimeDao: TtsEngineRuntimeDao
 
     companion object {
 

@@ -1,0 +1,194 @@
+package io.legado.app.ui.main.home
+
+import android.view.ViewGroup
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import io.legado.app.R
+import io.legado.app.ui.design.components.NgButtonShapeVariant
+import io.legado.app.ui.design.components.compose.NgBottomDrawerSurface
+import io.legado.app.ui.design.components.compose.NgButton
+import io.legado.app.ui.design.components.compose.NgDismissibleDrawer
+import io.legado.app.ui.design.components.compose.NgDrawerContentCardStyle
+import io.legado.app.ui.design.components.compose.NgDrawerDragHandle
+import io.legado.app.ui.design.components.compose.NgDrawerDragHandleVariant
+import io.legado.app.ui.design.components.compose.NgIconButton
+import io.legado.app.ui.design.components.compose.NgFormSwitchRow
+import io.legado.app.ui.design.theme.NgTheme
+
+/** Save commits the surrounding edit; dismissing only discards the drawer's local selection. */
+@Composable
+internal fun HomeWidgetEditorDrawer(
+    widget: HomeWidgetInstance,
+    usedWidgets: List<HomeWidgetInstance>,
+    confirmTitle: String,
+    onDismiss: () -> Unit,
+    autoRefreshUpdates: Boolean?,
+    onSave: (String, Boolean?) -> Boolean,
+    onPreviewTypesChanged: (Set<String>) -> Unit = {},
+    preview: @Composable (HomeWidgetVariant) -> Unit,
+) {
+    var selectedId by rememberSaveable(widget.id, widget.variantId) { mutableStateOf(widget.variantId) }
+    var selectedAutoRefresh by rememberSaveable(widget.id, autoRefreshUpdates) {
+        mutableStateOf(autoRefreshUpdates)
+    }
+    val selected = HomeWidgetCatalog.renderVariant(widget.copy(variantId = selectedId), LocalHomeWidgetSkins.current.installed)
+        ?: return
+    var submitted by remember(widget.id) { mutableStateOf(false) }
+    val previewTypes = remember(widget.typeId) { setOf(widget.typeId) }
+    HomeWidgetPreviewTypes(previewTypes, onPreviewTypesChanged)
+    HomeWidgetDrawerShell(
+        title = stringResource(HomeWidgetContents.find(widget.typeId).titleRes),
+        confirmTitle = confirmTitle,
+        onDismiss = onDismiss,
+        onConfirm = { if (!submitted) submitted = onSave(selected.id, selectedAutoRefresh) },
+    ) {
+        HomeWidgetStyleChooser(widget.typeId, selected, usedWidgets,
+            onSelect = { selectedId = it }, preview = preview)
+        selectedAutoRefresh?.let { checked ->
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 12.dp),
+                color = Color(NgTheme.colors.onSurface).copy(alpha = 0.12f),
+            )
+            NgFormSwitchRow(
+                title = stringResource(R.string.pt_auto_refresh),
+                checked = checked,
+                onCheckedChange = { selectedAutoRefresh = it },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            )
+        }
+    }
+}
+
+/** One window for both add pages; explicit close gestures dismiss, system Back navigates first. */
+@Composable
+internal fun HomeWidgetDrawerShell(
+    title: String,
+    confirmTitle: String?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    onNavigateBack: (() -> Unit)? = null,
+    confirmEnabled: Boolean = true,
+    headerAction: @Composable (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onNavigateBack ?: onDismiss,
+        properties = DialogProperties(
+            // Compose 1.7.6's false branch measures from Configuration instead of the window.
+            usePlatformDefaultWidth = true,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        val window = (LocalView.current.parent as DialogWindowProvider).window
+        DisposableEffect(window) {
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            onDispose { }
+        }
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier.fillMaxSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+            )
+            // Consume this Dialog's actual safe area once; content never uses screenHeightDp.
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                val drawerMaxHeight = maxHeight * 0.85f
+                NgDismissibleDrawer(onDismiss = onDismiss) {
+                    NgBottomDrawerSurface(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = drawerMaxHeight),
+                        contentCardStyle = NgDrawerContentCardStyle.ADAPTIVE,
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .semantics { dismiss { onDismiss(); true } }
+                                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 12.dp)
+                                .pointerInput(Unit) { detectTapGestures(onTap = {}) },
+                        ) {
+                            NgDrawerDragHandle(variant = NgDrawerDragHandleVariant.COMPACT)
+                            Row(
+                                Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (onNavigateBack != null) {
+                                    NgIconButton(onClick = onNavigateBack, modifier = Modifier.size(48.dp)) {
+                                        Icon(
+                                            painterResource(R.drawable.ic_arrow_back),
+                                            contentDescription = stringResource(R.string.back),
+                                            tint = Color(NgTheme.colors.onSurface),
+                                            modifier = Modifier.size(24.dp),
+                                        )
+                                    }
+                                }
+                                Text(
+                                    title,
+                                    Modifier.weight(1f),
+                                    color = Color(NgTheme.colors.onSurface),
+                                    fontSize = 18.sp,
+                                    lineHeight = 24.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                headerAction?.invoke()
+                            }
+                            content()
+                            if (confirmTitle != null) {
+                                NgButton(
+                                    onClick = onConfirm,
+                                    enabled = confirmEnabled,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                                        .heightIn(min = 48.dp),
+                                    shapeVariant = NgButtonShapeVariant.ROUNDED,
+                                ) {
+                                    Text(confirmTitle, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

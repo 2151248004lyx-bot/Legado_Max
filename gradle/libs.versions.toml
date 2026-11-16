@@ -90,6 +90,8 @@ spotless = "7.0.2"
 
 materialKolor = "4.1.1"
 
+soundtouchJni = "1.1.1"
+
 [libraries]
 
 activity-activity = { module = "androidx.activity:activity", version.ref = "activity" }
@@ -154,6 +156,8 @@ media3-session = { module = "androidx.media3:media3-session", version.ref = "med
 gsyVideoPlayer-java = { module = "io.github.carguo:gsyvideoplayer-java", version.ref = "gsyvideoplayer" }
 gsyVideoPlayer-exo2 = { module = "io.github.carguo:gsyvideoplayer-exo2", version.ref = "gsyvideoplayer" }
 danmakuFlameMaster = { module = "com.github.CarGuo.DanmakuFlameMaster:DanmakuFlameMaster", version.ref = "danmaku" }
+soundtouch-jni-android = { module = "com.tianscar.soundtouch:soundtouch-jni-android", version.ref = "soundtouchJni" }
+soundtouch-jni-core = { module = "com.tianscar.soundtouch:soundtouch-jni-core", version.ref = "soundtouchJni" }
 
 markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
 markwon-image-glide = { module = "io.noties.markwon:image-glide", version.ref = "markwon" }
