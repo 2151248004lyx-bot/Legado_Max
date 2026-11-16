@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--App-->
-    <string name="app_name">Legado</string>
+    <string name="app_name">柔光测试</string>
     <string name="app_name_a">LegadoA</string>
     <string name="app_name_debug" translatable="false">阅读D</string>
     <string name="receiving_shared_label">Legado·search</string>

@@ -1,0 +1,86 @@
+name: 柔光测试包构建
+
+# 只服务于 test/soft-gradient-only-snapshot 这条一次性测试分支，
+# 不参与 main 的任何发布流水线。
+on:
+  push:
+    branches:
+      - test/soft-gradient-only-snapshot
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soft-gradient-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: 缓存 Gradle 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            app/build/caches
+          key: softgradient-gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            softgradient-gradle-${{ runner.os }}-
+
+      - name: 清空 18PlusList
+        run: echo "" > $GITHUB_WORKSPACE/app/src/main/assets/18PlusList.txt
+
+      - name: 装入独立测试签名
+        run: |
+          cp $GITHUB_WORKSPACE/.github/workflows/softgradient-test.jks $GITHUB_WORKSPACE/app/softgradient-test.jks
+          cat >> $GITHUB_WORKSPACE/gradle.properties << EOF
+          RELEASE_STORE_FILE=./softgradient-test.jks
+          RELEASE_KEY_ALIAS=softgradient
+          RELEASE_STORE_PASSWORD=softgradient_test_2026
+          RELEASE_KEY_PASSWORD=softgradient_test_2026
+          EOF
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: 打包测试版 appMax（ABI 拆分）
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleAppMaxRelease --build-cache --parallel --daemon --warning-mode all
+
+      - name: 整理 APK 名称
+        run: |
+          mkdir -p ${{ github.workspace }}/apk/
+          for file in $(ls ${{ github.workspace }}/app/build/outputs/apk/*/*/*.apk); do
+            baseName=$(basename "$file" .apk)
+            abiPart=""
+            if [[ "$baseName" == *"_armeabi-v7a" ]]; then
+              abiPart="_armeabi-v7a"
+            elif [[ "$baseName" == *"_arm64-v8a" ]]; then
+              abiPart="_arm64-v8a"
+            elif [[ "$baseName" == *"_universal" ]]; then
+              abiPart="_universal"
+            fi
+            mv "$file" "${{ github.workspace }}/apk/柔光测试包${abiPart}.apk"
+          done
+          ls -l ${{ github.workspace }}/apk/
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: soft-gradient-test-apk
+          path: ${{ github.workspace }}/apk/*.apk

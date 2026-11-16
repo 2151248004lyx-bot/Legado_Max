@@ -160,7 +160,10 @@ android {
         }
         appMax {
             dimension = "app"
-            applicationId = "io.legado.app.yuedu"
+            // 【TEST 一次性柔光测试包】独立包名，可与正式版共存安装
+            applicationId = "io.legado.app.yuedu.testsoftgradient"
+            // 版本名打标记，设置页内可直接辨认
+            versionNameSuffix = "-softGradient-TEST"
             manifestPlaceholders = [app_name: "@string/app_name"]
         }
     }
