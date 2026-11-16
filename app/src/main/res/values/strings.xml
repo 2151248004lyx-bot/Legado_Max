@@ -3025,6 +3025,7 @@ Night: %5$s / %6$s / %7$s / %8$s</string>
         <item>google</item>
         <item>claude</item>
     </string-array>
+    <string name="default_file_picker">Default file picker</string>
     <string-array name="default_file_picker">
 		<item>@string/system_file_picker</item>
 		<item>@string/built_in_file_picker</item>

@@ -156,4 +156,11 @@
     <!-- 管理界面半透明层级色（日间用黑叠加，夜间用白叠加，随背景自然融合） -->
     <color name="background_card_surface">#0F000000</color>
     <color name="border_card_surface">#1A000000</color>
+
+    <!-- NG 角色头像/启动背景色 -->
+    <color name="launcher_background_main">#FFF9F1</color>
+    <color name="character_avatar_male">#FF9EB8FF</color>
+    <color name="character_avatar_female">#FFFFA1B5</color>
+    <color name="character_avatar_narrator">#FFA58BE3</color>
+    <color name="character_avatar_unknown">#FFE8E8E8</color>
 </resources>
