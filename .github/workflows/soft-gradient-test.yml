@@ -1,11 +1,11 @@
 name: 柔光测试包构建
 
-# 只服务于 test/soft-gradient-only-snapshot 这条一次性测试分支，
+# 只服务于 test-soft-gradient-only 这条一次性测试分支，
 # 不参与 main 的任何发布流水线。
 on:
   push:
     branches:
-      - test/soft-gradient-only-snapshot
+      - test-soft-gradient-only
   workflow_dispatch:
 
 permissions:
