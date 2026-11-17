@@ -31,12 +31,8 @@ internal object NgThemeModeStore {
     private const val STANDARD_MODE_DAY = "1"
     private val standardModes = setOf("0", "1", "2")
 
-    /** 一次性柔光测试包专用开关；正式版本发布前必须改回 false。 */
-    private const val FORCE_SOFT_GRADIENT_TEST = true
-
     private fun requestedPresentation(context: Context): NgThemePresentationMode = when {
         AppConfig.isEInkMode -> NgThemePresentationMode.EINK
-        FORCE_SOFT_GRADIENT_TEST -> NgThemePresentationMode.SOFT_GRADIENT
         context.getPrefString(
             PreferKey.ngThemePresentationMode,
             PRESENTATION_MULTICOLOR,
