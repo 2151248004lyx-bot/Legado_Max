@@ -160,8 +160,8 @@ jobs:
 
       - id: set-matrix
         run: |
-          # 新增 debug 构建类型
-          echo 'build_matrix={"product":["app"],"type":["release","releaseS","releaseLegacy","debug"]}' >> $GITHUB_OUTPUT
+          # 试验阶段只出 appMax 原包测试版；需要共存版 appS / 兼容版 appLegacy / 调试包时再加回
+          echo 'build_matrix={"product":["app"],"type":["release"]}' >> $GITHUB_OUTPUT
 
   build:
     needs: prepare
