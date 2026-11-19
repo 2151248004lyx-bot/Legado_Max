@@ -1,0 +1,61 @@
+name: 上游同步并自动出包
+
+# 定时轮询上游 Suml-1/Legado_Max：发现上游 main 有新提交，就合并到本 fork 的 main，
+# 推送后自动触发 Test Build 出测试包。也可在 Actions 页面手动 Run workflow。
+# 注意：fork 无法订阅上游 webhook，只能定时轮询；合并若与本地改动冲突会停止，不会强制覆盖。
+
+on:
+  schedule:
+    - cron: '0 3,15 * * *'   # UTC 03:00 / 15:00（北京 11:00 / 23:00）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  UPSTREAM_REPO: Suml-1/Legado_Max
+  TEST_WORKFLOW: test.yml
+
+jobs:
+  sync-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取自己的 fork
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: 配置提交身份
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 添加上游并拉取最新 main
+        run: |
+          git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }}.git
+          git fetch upstream main
+
+      - name: 检测上游是否有新提交
+        id: check
+        run: |
+          git checkout main
+          if git merge-base --is-ancestor upstream/main main; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "上游无新提交，本次跳过，不出包"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "检测到上游新提交，开始合并"
+          fi
+
+      - name: 合并上游到 main（冲突则停止，不强制推送）
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git merge --no-edit upstream/main
+          git push origin main
+
+      - name: 触发测试包构建
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run "${{ env.TEST_WORKFLOW }}" --ref main
