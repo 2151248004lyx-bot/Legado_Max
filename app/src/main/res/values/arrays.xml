@@ -54,6 +54,12 @@
 		<item>@string/layout_grid6</item>
 	</string-array>
 
+	<!-- 立体书架模式：0 封面流三维 / 1 书脊木架（存取时 +1 映射到 stereo 1/2） -->
+	<string-array name="bookshelf_stereo_mode">
+		<item>封面流三维</item>
+		<item>书脊木架</item>
+	</string-array>
+
 	<string-array name="book_sort">
 		<item>@string/text_default</item>
 		<item>@string/bookshelf_px_0</item>

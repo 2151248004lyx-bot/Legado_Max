@@ -186,6 +186,8 @@ abstract class BaseBookshelfFragment(layoutId: Int) :
             var showBookname = AppConfig.showBookname
             var bookLayout = AppConfig.bookLayout
             var folderLayout = AppConfig.folderLayout
+            // 立体书架模式下拉位置：0 封面流 / 1 书脊（存取映射 stereo 1/2）
+            var stereoMode = if (AppConfig.bookshelfStereo == 2) 1 else 0
             val alertBinding =
                 DialogBookshelfConfigBinding.inflate(layoutInflater)
                     .apply {
@@ -223,6 +225,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) :
                         swShowBookshelfFastScroller.isChecked = AppConfig.showBookshelfFastScroller
                         swShowBookshelfTagBar.isChecked = AppConfig.showBookshelfTagBar
                         swBookshelfThreed.isChecked = AppConfig.bookshelf3D
+                        spStereoMode.setSelection(stereoMode)
                         // 3D 外观档位滑块，仅开启 3D 时可见
                         llThreedOptions.visibility = if (AppConfig.bookshelf3D) View.VISIBLE else View.GONE
                         sbThreedWidth.progress = AppConfig.bookshelf3dWidth
@@ -338,8 +341,14 @@ abstract class BaseBookshelfFragment(layoutId: Int) :
                         AppConfig.showBookshelfTagBar = swShowBookshelfTagBar.isChecked
                         postEvent(EventBus.BOOKSHELF_REFRESH, "")
                     }
-                    if (AppConfig.bookshelf3D != swBookshelfThreed.isChecked) {
-                        AppConfig.bookshelf3D = swBookshelfThreed.isChecked
+                    val stereoOn = swBookshelfThreed.isChecked
+                    val newStereo = if (stereoOn) spStereoMode.selectedItemPosition + 1 else 0
+                    if (AppConfig.bookshelf3D != stereoOn) {
+                        AppConfig.bookshelf3D = stereoOn
+                        refreshBookshelf = true
+                    }
+                    if (AppConfig.bookshelfStereo != newStereo) {
+                        AppConfig.bookshelfStereo = newStereo
                         refreshBookshelf = true
                     }
                     if (AppConfig.bookshelf3dWidth != sbThreedWidth.progress) {

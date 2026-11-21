@@ -69,6 +69,8 @@ object PreferKey {
 
     // 3D 立本书架开关（默认值按设备性能自动判断，用户可手动覆盖）
     const val bookshelf3D = "bookshelf3D"
+    // 立体书架模式：0 关 / 1 CoverFlow 三维封面流 / 2 书脊木架（替代旧 3D 布尔开关）
+    const val bookshelfStereo = "bookshelfStereo"
     // 3D 书架外观档位：书脊宽窄 / 书高矮 / 层间距（1 紧凑 2 标准 3 宽松）
     const val bookshelf3dWidth = "bookshelf3dWidth"
     const val bookshelf3dHeight = "bookshelf3dHeight"

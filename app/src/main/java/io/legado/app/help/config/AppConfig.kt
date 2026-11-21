@@ -414,6 +414,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     /**
+     * 立体书架模式：0 关 / 1 CoverFlow 三维封面流 / 2 书脊木架。
+     * 替代旧 [bookshelf3D] 布尔；旧开关开启时按 1 处理。低端机 / 墨水屏在渲染层强制回退普通书架。
+     */
+    var bookshelfStereo: Int
+        get() = appCtx.getPrefInt(PreferKey.bookshelfStereo, if (bookshelf3D) 1 else 0)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.bookshelfStereo, value)
+        }
+
+    /**
      * 3D 立本书架开关。
      * 首次未手动设置时按设备性能自动判断：核心数 ≥ 4、运行内存 ≥ 2.5GB 且非墨水屏才默认开启；
      * 入门设备与墨水屏默认关闭。用户可在书架配置里手动覆盖，渲染层仍会对低端设备强制回退普通书架。

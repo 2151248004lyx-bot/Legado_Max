@@ -37,6 +37,8 @@ data class BookshelfDisplayConfig(
     val marginPx: Int,
     val fastScrollerEnabled: Boolean,
     val bookshelf3D: Boolean,
+    /** 立体书架模式：0 关 / 1 CoverFlow / 2 书脊木架 */
+    val stereo: Int,
 ) {
 
     /** 书籍是否网格布局（列数 ≥ 2） */
@@ -44,6 +46,15 @@ data class BookshelfDisplayConfig(
 
     /** 是否启用 3D 立本书架（开关开启且设备性能达标） */
     val is3DMode: Boolean get() = bookshelf3D
+
+    /** CoverFlow 三维封面流 */
+    val isCoverFlow: Boolean get() = stereo == 1
+
+    /** 书脊木架 */
+    val isSpine: Boolean get() = stereo == 2
+
+    /** 是否进入任一立体书架（低端机回退由 canUse3DBookshelf 在配置层兜底） */
+    val isStereo: Boolean get() = stereo != 0
 
     /** 是否紧凑列表 */
     val isCompactList: Boolean get() = bookLayout == 1
@@ -88,6 +99,7 @@ data class BookshelfDisplayConfig(
             marginPx = AppConfig.bookshelfMargin,
             fastScrollerEnabled = AppConfig.showBookshelfFastScroller,
             bookshelf3D = AppConfig.canUse3DBookshelf(),
+            stereo = if (AppConfig.canUse3DBookshelf()) AppConfig.bookshelfStereo else 0,
         )
     }
 }

@@ -272,6 +272,31 @@
             android:orientation="vertical"
             app:layout_constraintTop_toBottomOf="@+id/sw_bookshelf_threed">
 
+            <!-- 立体书架模式：封面流三维 / 书脊木架 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="立体书架样式"
+                    android:textColor="@color/primaryText"
+                    android:textSize="14sp" />
+
+                <androidx.appcompat.widget.AppCompatSpinner
+                    android:id="@+id/sp_stereo_mode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:entries="@array/bookshelf_stereo_mode"
+                    android:theme="@style/Spinner"
+                    tools:ignore="TouchTargetSizeCheck" />
+
+            </LinearLayout>
+
             <io.legado.app.ui.widget.DetailSeekBar
                 android:id="@+id/sb_threed_width"
                 android:layout_width="match_parent"
