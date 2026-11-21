@@ -12,13 +12,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -30,24 +28,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.ui.main.bookshelf.compose.BookshelfBookItem
 import io.legado.app.ui.theme.AppDimens
+import io.legado.app.ui.widget.components.AppBookCover
 
 /** 每层立书数量（第一版固定切片，后续可按屏宽自适应） */
 private const val BOOKS_PER_ROW = 7
 private val BoardColor = Color(0xFF8A6E52)
 private val BoardShadow = Color(0x33000000)
-private val InkColor = Color(0xFF2B2118)
 
 /**
  * 书脊木架书架（外观移植自 Lumi_Books）。
- * 书籍按层立在木架上：书脊厚度 / 高度 / 倾斜由书名哈希固定，竖排书名 + 底部作者缩写。
- * 第一版不接文件夹叠放、拖拽重排与封面取色；点击 / 长按沿用旧书架。
+ * 书籍按层立在木架上：书脊直接取封面中部竖条（裁剪填满），厚薄 / 高矮 / 倾斜由书名哈希固定，
+ * 自然错落；无封面时由封面组件回退默认底色与书名。点击 / 长按沿用旧书架。
+ * 第一版不接文件夹厚脊、平放叠放、拖拽重排。
  */
 @Composable
 internal fun SpineBookshelf(
@@ -145,24 +141,9 @@ private fun SpineFace(
 ) {
     val display = bookItem.display
     val traits = remember(bookItem.key) { SpineTraitsProvider.traits(bookItem.key) }
-    val density = LocalDensity.current
     val spineW = traits.thickness.dp
     val spineH = rowHeight * traits.heightFraction
-    val bg = Color(SpineTraitsProvider.palette[traits.colorIndex])
-    val title = SpineText.mainTitle(display.name)
-    val author = SpineText.shortAuthor(display.author ?: "")
-    val units = remember(title) { SpineText.verticalUnits(title) }
-    val baseSize = (traits.thickness * 0.42f).coerceIn(8.5f, 14f)
-    // 竖排可用高度（扣除上下留白），字数超出就等比缩字号，尽量排全书名。
-    val availPx = with(density) { (spineH - 12.dp).toPx() }
-    fun lineHeightPx(sizeSp: Float) = with(density) { sizeSp.sp.toPx() } * 1.15f
-    var titleSize = baseSize
-    var capacity = (availPx / lineHeightPx(baseSize)).toInt().coerceAtLeast(1)
-    if (units.size > capacity) {
-        titleSize = (availPx / (units.size * 1.15f)).coerceIn(7.5f, baseSize)
-        capacity = units.size
-    }
-    val shownUnits = units.take(capacity)
+    val fallbackBg = Color(SpineTraitsProvider.palette[traits.colorIndex])
 
     Box(
         modifier = Modifier
@@ -173,39 +154,18 @@ private fun SpineFace(
                 transformOrigin = TransformOrigin(0.5f, 1f)
             }
             .clip(RoundedCornerShape(2.dp))
-            .background(bg)
+            .background(fallbackBg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                shownUnits.forEach { ch ->
-                    Text(
-                        text = ch,
-                        color = InkColor,
-                        fontSize = titleSize.sp,
-                        lineHeight = (titleSize * 1.15f).sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Clip,
-                    )
-                }
-            }
-            if (author.isNotBlank()) {
-                Text(
-                    text = author,
-                    color = InkColor.copy(alpha = 0.7f),
-                    fontSize = 7.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                )
-            }
-        }
+        AppBookCover(
+            modifier = Modifier.fillMaxSize(),
+            name = display.name,
+            author = display.author,
+            coverPath = display.getDisplayCover(),
+            galleryIdentity = display.bookUrl,
+            sourceOrigin = display.origin,
+            contentDescription = display.name,
+            cornerRadius = 2.dp,
+        )
     }
 }
