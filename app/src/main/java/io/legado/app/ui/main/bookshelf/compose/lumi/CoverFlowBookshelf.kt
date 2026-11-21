@@ -211,7 +211,7 @@ private fun CurrentBookBar(
             text = display.name,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
+            maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )
         if (!display.author.isNullOrBlank()) {
@@ -219,7 +219,7 @@ private fun CurrentBookBar(
                 text = display.author,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

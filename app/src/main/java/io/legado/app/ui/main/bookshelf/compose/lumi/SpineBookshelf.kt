@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -144,13 +145,24 @@ private fun SpineFace(
 ) {
     val display = bookItem.display
     val traits = remember(bookItem.key) { SpineTraitsProvider.traits(bookItem.key) }
+    val density = LocalDensity.current
     val spineW = traits.thickness.dp
     val spineH = rowHeight * traits.heightFraction
     val bg = Color(SpineTraitsProvider.palette[traits.colorIndex])
     val title = SpineText.mainTitle(display.name)
     val author = SpineText.shortAuthor(display.author ?: "")
     val units = remember(title) { SpineText.verticalUnits(title) }
-    val titleSize = (traits.thickness * 0.42f).coerceIn(8.5f, 14f)
+    val baseSize = (traits.thickness * 0.42f).coerceIn(8.5f, 14f)
+    // 竖排可用高度（扣除上下留白），字数超出就等比缩字号，尽量排全书名。
+    val availPx = with(density) { (spineH - 12.dp).toPx() }
+    fun lineHeightPx(sizeSp: Float) = with(density) { sizeSp.sp.toPx() } * 1.15f
+    var titleSize = baseSize
+    var capacity = (availPx / lineHeightPx(baseSize)).toInt().coerceAtLeast(1)
+    if (units.size > capacity) {
+        titleSize = (availPx / (units.size * 1.15f)).coerceIn(7.5f, baseSize)
+        capacity = units.size
+    }
+    val shownUnits = units.take(capacity)
 
     Box(
         modifier = Modifier
@@ -174,7 +186,7 @@ private fun SpineFace(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                units.take(10).forEach { ch ->
+                shownUnits.forEach { ch ->
                     Text(
                         text = ch,
                         color = InkColor,
