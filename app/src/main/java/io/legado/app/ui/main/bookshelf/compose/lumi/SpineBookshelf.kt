@@ -177,7 +177,7 @@ private fun SpineFace(
     val title = SpineText.mainTitle(display.name)
     val author = SpineText.shortAuthor(display.author ?: "")
     val units = remember(title) { SpineText.verticalUnits(title) }
-    val baseSize = (traits.thickness * 0.46f).coerceIn(8.5f, 13f)
+    val baseSize = (traits.thickness * 0.44f).coerceIn(9f, 14f)
     val availPx = with(density) { (spineH - 12.dp).toPx() }
     fun lineHeightPx(sizeSp: Float) = with(density) { sizeSp.sp.toPx() } * 1.15f
     var titleSize = baseSize
@@ -243,7 +243,7 @@ private fun SpineFace(
                 Text(
                     text = author,
                     color = ink.copy(alpha = 0.78f),
-                    fontSize = 7.sp,
+                    fontSize = 8.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
                 )

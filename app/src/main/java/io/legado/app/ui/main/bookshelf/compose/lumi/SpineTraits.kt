@@ -39,8 +39,8 @@ internal object SpineTraitsProvider {
 
     fun traits(id: String, seed: Long = 0L): SpineTraits {
         val random = Random(seed xor (id.hashCode().toLong() * MIX))
-        // 厚度 14–30dp，窄长书脊，厚薄略有差异
-        val thickness = 14f + random.nextFloat() * 16f
+        // 厚度 26–44dp，留出书名作者与封面纹理空间，厚薄自然错落
+        val thickness = 26f + random.nextFloat() * 18f
         // 高度系数 0.70–1.00，高矮差拉开，顶边自然参差
         val heightFraction = 0.70f + random.nextFloat() * 0.30f
         val roll = random.nextFloat()
