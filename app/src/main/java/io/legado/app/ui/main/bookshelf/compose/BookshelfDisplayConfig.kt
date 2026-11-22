@@ -37,7 +37,7 @@ data class BookshelfDisplayConfig(
     val marginPx: Int,
     val fastScrollerEnabled: Boolean,
     val bookshelf3D: Boolean,
-    /** 立体书架模式：0 关 / 1 CoverFlow / 2 书脊木架 */
+    /** 立体书架模式：0 关 / 1 CoverFlow / 2 书脊木架 / 3 木架封面网格 */
     val stereo: Int,
 ) {
 
@@ -52,6 +52,9 @@ data class BookshelfDisplayConfig(
 
     /** 书脊木架 */
     val isSpine: Boolean get() = stereo == 2
+
+    /** 木架封面网格：封面朝前立在层板上，点开带翻页转场 */
+    val isShelfGrid: Boolean get() = stereo == 3
 
     /** 是否进入任一立体书架（低端机回退由 canUse3DBookshelf 在配置层兜底） */
     val isStereo: Boolean get() = stereo != 0

@@ -186,8 +186,12 @@ abstract class BaseBookshelfFragment(layoutId: Int) :
             var showBookname = AppConfig.showBookname
             var bookLayout = AppConfig.bookLayout
             var folderLayout = AppConfig.folderLayout
-            // 立体书架模式下拉位置：0 封面流 / 1 书脊（存取映射 stereo 1/2）
-            var stereoMode = if (AppConfig.bookshelfStereo == 2) 1 else 0
+            // 立体书架模式下拉位置：0 封面流 / 1 书脊 / 2 木架封面（存取映射 stereo 1/2/3）
+            var stereoMode = when (AppConfig.bookshelfStereo) {
+                2 -> 1
+                3 -> 2
+                else -> 0
+            }
             val alertBinding =
                 DialogBookshelfConfigBinding.inflate(layoutInflater)
                     .apply {

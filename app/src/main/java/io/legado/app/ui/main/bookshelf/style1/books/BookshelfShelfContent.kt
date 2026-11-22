@@ -26,6 +26,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfDisplayConfig
 import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItem
 import io.legado.app.ui.main.bookshelf.compose.lumi.CoverFlowBookshelf
+import io.legado.app.ui.main.bookshelf.compose.lumi.ShelfGridBookshelf
 import io.legado.app.ui.main.bookshelf.compose.lumi.SpineBookshelf
 import io.legado.app.ui.theme.AppDimens
 import io.legado.app.ui.widget.components.VerticalScrollbar
@@ -52,6 +53,16 @@ internal fun BookshelfShelfContent(
         displayConfig.isCoverFlow -> CoverFlowBookshelf(
             modifier = modifier,
             shelfItems = shelfItems,
+            bottomPaddingPx = bottomPaddingPx,
+            marginPx = displayConfig.marginPx,
+            onScrollBackwardChange = onScrollBackwardChange,
+            onBookClick = onBookClick,
+            onBookLongClick = onBookLongClick,
+        )
+        displayConfig.isShelfGrid -> ShelfGridBookshelf(
+            modifier = modifier,
+            shelfItems = shelfItems,
+            displayConfig = displayConfig,
             bottomPaddingPx = bottomPaddingPx,
             marginPx = displayConfig.marginPx,
             onScrollBackwardChange = onScrollBackwardChange,
