@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -41,6 +44,12 @@ private val BoardShadowBrush = Brush.verticalGradient(
     0f to Color.Black.copy(alpha = 0.32f),
     1f to Color.Black.copy(alpha = 0f),
 )
+/** 两侧挡板木纹，比底板更深，形成柜体夹合感 */
+private val SideWoodBrush = Brush.verticalGradient(
+    0f to Color(0xFF8A6845),
+    1f to Color(0xFF543B24),
+)
+private val SidePlateWidth = 7.dp
 private const val DEFAULT_COLUMNS = 3
 
 /**
@@ -85,20 +94,43 @@ internal fun ShelfGridBookshelf(
             items(rows, key = { row -> row.firstOrNull()?.key ?: row.hashCode() }) { row ->
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        row.forEach { item ->
-                            Box(modifier = Modifier.weight(1f)) {
-                                BookshelfGridItem(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    bookItem = item,
-                                    displayConfig = displayConfig,
-                                    onClick = { opening = it },
-                                    onLongClick = onBookLongClick,
-                                )
+                        // 左侧板
+                        Box(
+                            modifier = Modifier
+                                .width(SidePlateWidth)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(topStart = 2.dp))
+                                .background(SideWoodBrush),
+                        )
+                        // 书籍区：封面夹在两侧板之间
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 5.dp),
+                        ) {
+                            row.forEach { item ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    BookshelfGridItem(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        bookItem = item,
+                                        displayConfig = displayConfig,
+                                        onClick = { opening = it },
+                                        onLongClick = onBookLongClick,
+                                    )
+                                }
+                            }
+                            repeat(columns - row.size) {
+                                Box(modifier = Modifier.weight(1f))
                             }
                         }
-                        repeat(columns - row.size) {
-                            Box(modifier = Modifier.weight(1f))
-                        }
+                        // 右侧板
+                        Box(
+                            modifier = Modifier
+                                .width(SidePlateWidth)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(topEnd = 2.dp))
+                                .background(SideWoodBrush),
+                        )
                     }
                     // 木质层板托底 + 下方落影
                     Box(
