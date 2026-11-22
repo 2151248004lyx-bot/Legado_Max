@@ -39,10 +39,12 @@ internal object SpineTraitsProvider {
 
     fun traits(id: String, seed: Long = 0L): SpineTraits {
         val random = Random(seed xor (id.hashCode().toLong() * MIX))
-        val thickness = 20f + random.nextFloat() * random.nextFloat() * 20f
-        val heightFraction = 0.80f + random.nextFloat() * 0.20f
+        // 厚度 18–42dp 线性分布，厚薄都有，不再偏向薄本
+        val thickness = 18f + random.nextFloat() * 24f
+        // 高度系数 0.70–1.00，高矮差拉开，顶边自然参差
+        val heightFraction = 0.70f + random.nextFloat() * 0.30f
         val roll = random.nextFloat()
-        val lean = if (roll < 0.80f) 0f else (7f + random.nextFloat() * 6f)
+        val lean = if (roll < 0.82f) 0f else (7f + random.nextFloat() * 6f)
         val colorIndex = abs(random.nextInt()) % palette.size
         return SpineTraits(thickness, heightFraction, lean, colorIndex)
     }
