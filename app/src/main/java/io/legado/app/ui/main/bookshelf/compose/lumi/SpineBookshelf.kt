@@ -27,10 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -42,7 +45,8 @@ import io.legado.app.ui.widget.components.AppBookCover
 private val BoardColor = Color(0xFF8A6E52)
 private val BoardShadow = Color(0x33000000)
 private val SpineGap = 3.dp
-private val OnCoverInk = Color.White
+private val DarkInk = Color(0xFF2B2118)
+private val LightInk = Color(0xFFF8F3EA)
 private const val MIN_TITLE = 7.5f
 
 /**
@@ -173,7 +177,7 @@ private fun SpineFace(
     val title = SpineText.mainTitle(display.name)
     val author = SpineText.shortAuthor(display.author ?: "")
     val units = remember(title) { SpineText.verticalUnits(title) }
-    val baseSize = (traits.thickness * 0.42f).coerceIn(8.5f, 14f)
+    val baseSize = (traits.thickness * 0.46f).coerceIn(8.5f, 13f)
     val availPx = with(density) { (spineH - 12.dp).toPx() }
     fun lineHeightPx(sizeSp: Float) = with(density) { sizeSp.sp.toPx() } * 1.15f
     var titleSize = baseSize
@@ -183,6 +187,10 @@ private fun SpineFace(
         capacity = units.size
     }
     val shownUnits = units.take(capacity)
+    // 按底色亮度反色：亮底深字、暗底浅字，浅字再带黑阴影保证可读
+    val luminance = 0.2126f * fallbackBg.red + 0.7152f * fallbackBg.green + 0.0722f * fallbackBg.blue
+    val ink = if (luminance > 0.62f) DarkInk else LightInk
+    val shadow = if (ink == LightInk) Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1f), 2f) else null
 
     Box(
         modifier = Modifier
@@ -196,8 +204,11 @@ private fun SpineFace(
             .background(fallbackBg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
+        // 封面只作低透明度纹理，不压住文字
         AppBookCover(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = 0.35f },
             name = display.name,
             author = display.author,
             coverPath = display.getDisplayCover(),
@@ -206,8 +217,6 @@ private fun SpineFace(
             contentDescription = display.name,
             cornerRadius = 2.dp,
         )
-        // 薄暗化保证叠字可读
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)))
         Column(
             modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -221,18 +230,19 @@ private fun SpineFace(
                 shownUnits.forEach { ch ->
                     Text(
                         text = ch,
-                        color = OnCoverInk,
+                        color = ink,
                         fontSize = titleSize.sp,
                         lineHeight = (titleSize * 1.15f).sp,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
+                        style = TextStyle(shadow = shadow),
                     )
                 }
             }
             if (author.isNotBlank()) {
                 Text(
                     text = author,
-                    color = OnCoverInk.copy(alpha = 0.78f),
+                    color = ink.copy(alpha = 0.78f),
                     fontSize = 7.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
