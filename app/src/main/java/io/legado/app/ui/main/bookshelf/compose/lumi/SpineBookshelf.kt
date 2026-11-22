@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.ui.main.bookshelf.compose.BookshelfBookItem
 import io.legado.app.ui.theme.AppDimens
-import io.legado.app.ui.widget.components.AppBookCover
 
 private val BoardColor = Color(0xFF8A6E52)
 private val BoardShadow = Color(0x33000000)
@@ -51,8 +50,8 @@ private const val MIN_TITLE = 7.5f
 
 /**
  * 书脊木架书架（外观移植自 Lumi_Books）。
- * 书脊取封面中部竖条填充，之上叠竖排书名 + 底部作者；厚薄 / 高矮 / 倾斜按书名哈希固定并自然错落，
- * 每行按屏宽自动排满。点击 / 长按沿用旧书架。
+ * 纯色书脊不叠封面图，文字为主体；一部分直立竖排，一部分平放横躺（书名横排完整显示）。
+ * 点击 / 长按沿用旧书架。
  */
 @Composable
 internal fun SpineBookshelf(
@@ -76,21 +75,27 @@ internal fun SpineBookshelf(
         val rowHeight = maxHeight * 0.26f
         val horizontalPad = AppDimens.shelfContentHorizontalPadding * 2
         val availWidth = (maxWidth - horizontalPad).coerceAtLeast(100.dp)
-        // 按每本书脊厚度累加，排满一行再换行，末行不再留大块空当
+
+        fun itemWidth(item: BookshelfBookItem): Float {
+            val t = SpineTraitsProvider.traits(item.key, SpineText.mainTitle(item.display.name))
+            return if (t.flat) t.flatWidth else t.thickness
+        }
+
+        // 按每本书脊（或横条）宽度累加，排满一行再换行
         val rows = remember(shelfItems, availWidth) {
             val gap = SpineGap.value
             val result = mutableListOf<MutableList<BookshelfBookItem>>()
             var cur = mutableListOf<BookshelfBookItem>()
             var used = 0f
             for (item in shelfItems) {
-                val t = SpineTraitsProvider.traits(item.key).thickness
-                if (cur.isNotEmpty() && used + gap + t > availWidth.value) {
+                val w = itemWidth(item)
+                if (cur.isNotEmpty() && used + gap + w > availWidth.value) {
                     result.add(cur)
                     cur = mutableListOf()
                     used = 0f
                 }
                 cur.add(item)
-                used += if (cur.size == 1) t else gap + t
+                used += if (cur.size == 1) w else gap + w
             }
             if (cur.isNotEmpty()) result.add(cur)
             result
@@ -168,14 +173,58 @@ private fun SpineFace(
     onLongClick: () -> Unit,
 ) {
     val display = bookItem.display
-    val density = LocalDensity.current
-    val traits = remember(bookItem.key) { SpineTraitsProvider.traits(bookItem.key) }
-    val spineW = traits.thickness.dp
-    val spineH = rowHeight * traits.heightFraction
-    val fallbackBg = Color(SpineTraitsProvider.palette[traits.colorIndex])
-
     val title = SpineText.mainTitle(display.name)
     val author = SpineText.shortAuthor(display.author ?: "")
+    val traits = remember(bookItem.key) { SpineTraitsProvider.traits(bookItem.key, title) }
+    val fallbackBg = Color(SpineTraitsProvider.palette[traits.colorIndex])
+
+    // 按底色亮度反色：亮底深字、暗底浅字，浅字再带黑阴影保证可读
+    val luminance = 0.2126f * fallbackBg.red + 0.7152f * fallbackBg.green + 0.0722f * fallbackBg.blue
+    val ink = if (luminance > 0.62f) DarkInk else LightInk
+    val shadow = if (ink == LightInk) Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1f), 2f) else null
+
+    if (traits.flat) {
+        FlatFace(
+            title = title,
+            author = author,
+            bg = fallbackBg,
+            ink = ink,
+            shadow = shadow,
+            traits = traits,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+    } else {
+        UprightFace(
+            title = title,
+            author = author,
+            bg = fallbackBg,
+            ink = ink,
+            shadow = shadow,
+            traits = traits,
+            rowHeight = rowHeight,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun UprightFace(
+    title: String,
+    author: String,
+    bg: Color,
+    ink: Color,
+    shadow: Shadow?,
+    traits: SpineTraits,
+    rowHeight: Dp,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val density = LocalDensity.current
+    val spineW = traits.thickness.dp
+    val spineH = rowHeight * traits.heightFraction
     val units = remember(title) { SpineText.verticalUnits(title) }
     val baseSize = (traits.thickness * 0.44f).coerceIn(9f, 14f)
     val availPx = with(density) { (spineH - 12.dp).toPx() }
@@ -187,10 +236,6 @@ private fun SpineFace(
         capacity = units.size
     }
     val shownUnits = units.take(capacity)
-    // 按底色亮度反色：亮底深字、暗底浅字，浅字再带黑阴影保证可读
-    val luminance = 0.2126f * fallbackBg.red + 0.7152f * fallbackBg.green + 0.0722f * fallbackBg.blue
-    val ink = if (luminance > 0.62f) DarkInk else LightInk
-    val shadow = if (ink == LightInk) Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 1f), 2f) else null
 
     Box(
         modifier = Modifier
@@ -201,22 +246,9 @@ private fun SpineFace(
                 transformOrigin = TransformOrigin(0.5f, 1f)
             }
             .clip(RoundedCornerShape(2.dp))
-            .background(fallbackBg)
+            .background(bg)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        // 封面只作低透明度纹理，不压住文字
-        AppBookCover(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = 0.35f },
-            name = display.name,
-            author = display.author,
-            coverPath = display.getDisplayCover(),
-            galleryIdentity = display.bookUrl,
-            sourceOrigin = display.origin,
-            contentDescription = display.name,
-            cornerRadius = 2.dp,
-        )
         Column(
             modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -244,6 +276,53 @@ private fun SpineFace(
                     text = author,
                     color = ink.copy(alpha = 0.78f),
                     fontSize = 8.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FlatFace(
+    title: String,
+    author: String,
+    bg: Color,
+    ink: Color,
+    shadow: Shadow?,
+    traits: SpineTraits,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .width(traits.flatWidth.dp)
+            .height(traits.thickness.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(bg)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = title,
+                color = ink,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(shadow = shadow),
+                modifier = Modifier.weight(1f),
+            )
+            if (author.isNotBlank()) {
+                Text(
+                    text = author,
+                    color = ink.copy(alpha = 0.78f),
+                    fontSize = 7.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
                 )
