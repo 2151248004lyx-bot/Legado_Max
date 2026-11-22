@@ -23,11 +23,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import android.graphics.drawable.Drawable
 import io.legado.app.ui.main.bookshelf.compose.BookshelfBookItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfDisplayConfig
 import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
@@ -84,6 +86,8 @@ internal fun ShelfGridBookshelf(
     val columns = if (displayConfig.bookLayout >= 2) displayConfig.bookLayout else DEFAULT_COLUMNS
     val rows = remember(shelfItems, columns) { shelfItems.chunked(columns) }
     var opening by remember { mutableStateOf<BookshelfBookItem?>(null) }
+    // 复用书架上已加载好的封面 Drawable，点开转场不再二次请求封面图
+    val coverCache = remember { mutableStateMapOf<String, Drawable?>() }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -128,6 +132,7 @@ internal fun ShelfGridBookshelf(
                                             displayConfig = displayConfig,
                                             onClick = { opening = it },
                                             onLongClick = onBookLongClick,
+                                            onCoverReady = { coverCache[item.key] = it },
                                         )
                                     }
                                 }
@@ -164,6 +169,7 @@ internal fun ShelfGridBookshelf(
 
         BookOpenTransition(
             bookItem = opening,
+            coverDrawable = opening?.let { coverCache[it.key] },
             onFinished = {
                 opening?.let { onBookClick(it) }
                 opening = null

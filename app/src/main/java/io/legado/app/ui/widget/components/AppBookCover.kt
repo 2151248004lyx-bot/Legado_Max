@@ -92,6 +92,7 @@ private const val COVER_LOAD_TIMEOUT_MS = 12_000L
  * @param sourceOrigin 书源来源标识，影响网络请求头与图集身份回退
  * @param cornerRadius 封面圆角
  * @param loadOnlyWifi 是否只允许 WiFi 下加载网络封面
+ * @param onDrawableReady 回传当前实际显示的封面 Drawable，供转场等场景复用，避免二次加载
  */
 @Composable
 fun AppBookCover(
@@ -104,6 +105,7 @@ fun AppBookCover(
     sourceOrigin: String? = null,
     cornerRadius: Dp = AppDimens.bookCoverCornerRadius,
     loadOnlyWifi: Boolean = false,
+    onDrawableReady: ((Drawable?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     // 图集取图是"库查询 + 文件读取"（顺序模式还要回写缓存）：必须按取图身份记忆。
@@ -159,6 +161,7 @@ fun AppBookCover(
         // 加载失败回退默认封面（同名叠层由 defaultCoverShown/loadFailed 决定）
         val shown = loaded ?: defaultCoverDrawable()
         drawable = shown
+        onDrawableReady?.invoke(shown)
         startIfAnimatable(shown)
         loadFailed = loaded == null
     }

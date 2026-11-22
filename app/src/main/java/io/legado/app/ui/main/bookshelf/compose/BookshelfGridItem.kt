@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
+import android.graphics.drawable.Drawable
 import io.legado.app.ui.theme.AppDimens
 import io.legado.app.ui.widget.components.AppBookCover
 
@@ -53,6 +54,7 @@ fun BookshelfGridItem(
     displayConfig: BookshelfDisplayConfig,
     onClick: (BookshelfBookItem) -> Unit,
     onLongClick: (BookshelfBookItem) -> Unit,
+    onCoverReady: ((Drawable?) -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -74,6 +76,7 @@ fun BookshelfGridItem(
                 galleryIdentity = bookItem.display.bookUrl,
                 sourceOrigin = bookItem.display.origin,
                 contentDescription = bookItem.display.name,
+                onDrawableReady = onCoverReady,
             )
             bookItem.readProgress?.let { progress ->
                 Box(
