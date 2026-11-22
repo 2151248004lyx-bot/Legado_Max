@@ -25,10 +25,10 @@ import io.legado.app.ui.theme.AppDimens
 import io.legado.app.ui.widget.components.AppBookCover
 
 /**
- * 点开一本书的舒缓开书过渡：
- * 1. 封面由小放大到近全屏；
- * 2. 沿左侧书脊中缝把封面整页翻开，底下渐显对开内书页；
- * 3. 封面翻到背面淡出，内页铺满屏幕，顺势进入阅读页。
+ * 点开一本书的开书过渡：封面由小放大 → 沿书脊中缝翻开露出内页 → 封面淡出、内页展开接阅读页。
+ *
+ * 性能要点：动画进度只在各图层的 graphicsLayer 内读取，Composable 只组合一次，
+ * 封面图片不会被每一帧重建；属性用平滑曲线连续映射，避免分段硬切。
  * 动画播完一次后由父级清空 [bookItem] 并跳阅读页。
  */
 @Composable
@@ -43,60 +43,38 @@ internal fun BookOpenTransition(
     }
 
     val progress = remember { Animatable(0f) }
+    val density = LocalDensity.current
     LaunchedEffect(bookItem.key) {
         progress.snapTo(0f)
         progress.animateTo(
             1f,
-            tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+            tween(durationMillis = 1000, easing = FastOutSlowInEasing),
         )
         onFinished()
-    }
-
-    val density = LocalDensity.current
-    val p = progress.value
-
-    // 三段：放大铺满 → 中缝翻书露出内页 → 封面翻走、内页展开接阅读页
-    val zoomT = seg(p, 0f, 0.35f)
-    val flipT = seg(p, 0.35f, 0.75f)
-    val outT = seg(p, 0.75f, 1f)
-
-    val zoomScale = if (p < 0.35f) lerp(0.78f, 1.0f, zoomT) else 1.0f
-    // 沿左中缝向右翻开至背面，末段不回正
-    val flipDegrees = when {
-        p < 0.35f -> 0f
-        p < 0.75f -> lerp(0f, -175f, flipT)
-        else -> -175f
-    }
-    val coverAlpha = if (p < 0.75f) 1f else lerp(1f, 0f, outT)
-    val pageAlpha = when {
-        p < 0.35f -> 0f
-        p < 0.75f -> lerp(0f, 1f, flipT)
-        else -> 1f
-    }
-    val pageScale = if (p < 0.75f) lerp(0.95f, 1f, flipT) else 1f
-    val maskAlpha = lerp(0f, 0.35f, seg(p, 0f, 0.35f)).let {
-        if (p < 0.75f) it else lerp(it, 0.9f, outT)
     }
 
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        // 背景暗罩
+        // 背景暗罩：只动图层透明度，不重组内容
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = maskAlpha)),
+                .graphicsLayer { alpha = maskAlpha(progress.value) }
+                .background(Color.Black),
         )
 
-        // 对开内书页：封面翻走后露出
+        // 对开内书页：封面翻走后露出，静态组合一次
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    alpha = pageAlpha
-                    scaleX = pageScale
-                    scaleY = pageScale
+                    val p = progress.value
+                    alpha = pageAlpha(p)
+                    val s = pageScale(p)
+                    scaleX = s
+                    scaleY = s
                 },
         ) {
             Box(Modifier.fillMaxSize().background(Color(0xFFF3ECDC)))
@@ -113,7 +91,6 @@ internal fun BookOpenTransition(
                     .fillMaxHeight()
                     .background(Color(0xFFEDE5D3)),
             )
-            // 书脊中缝
             Box(
                 Modifier
                     .align(Alignment.Center)
@@ -123,18 +100,20 @@ internal fun BookOpenTransition(
             )
         }
 
-        // 封面：沿左中缝翻开
+        // 封面：沿左中缝翻开，图层内读取动画值
         AppBookCover(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f / AppDimens.BOOK_COVER_ASPECT)
                 .graphicsLayer {
-                    cameraDistance = with(density) { 20.dp.toPx() }
+                    val p = progress.value
+                    cameraDistance = with(density) { 18.dp.toPx() }
                     transformOrigin = TransformOrigin(0f, 0.5f)
-                    scaleX = zoomScale
-                    scaleY = zoomScale
-                    rotationY = flipDegrees
-                    alpha = coverAlpha
+                    val z = zoomScale(p)
+                    scaleX = z
+                    scaleY = z
+                    rotationY = flipDegrees(p)
+                    alpha = coverAlpha(p)
                 },
             name = bookItem.display.name,
             author = bookItem.display.author,
@@ -146,7 +125,23 @@ internal fun BookOpenTransition(
     }
 }
 
-private fun seg(p: Float, start: Float, end: Float): Float =
-    ((p - start) / (end - start)).coerceIn(0f, 1f)
+/** 把进度限制在 [a,b] 区间并归一化到 0..1 */
+private fun ramp(p: Float, a: Float, b: Float): Float =
+    ((p - a) / (b - a)).coerceIn(0f, 1f)
+
+/** smoothstep：起步、收尾都柔和，避免匀速硬切 */
+private fun ease(t: Float): Float = t * t * (3f - 2f * t)
 
 private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+private fun zoomScale(p: Float): Float = lerp(0.78f, 1.0f, ease(ramp(p, 0f, 0.6f)))
+
+private fun flipDegrees(p: Float): Float = -170f * ease(ramp(p, 0.25f, 0.9f))
+
+private fun coverAlpha(p: Float): Float = 1f - ramp(p, 0.78f, 1f)
+
+private fun pageAlpha(p: Float): Float = ease(ramp(p, 0.3f, 0.85f))
+
+private fun pageScale(p: Float): Float = lerp(0.96f, 1f, ramp(p, 0.3f, 0.85f))
+
+private fun maskAlpha(p: Float): Float = lerp(0.25f, 0.85f, ramp(p, 0f, 1f))
