@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.main.bookshelf.compose.BookshelfBookItem
@@ -29,8 +30,17 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfDisplayConfig
 import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
 import io.legado.app.ui.theme.AppDimens
 
-private val BoardColor = Color(0xFF8A6E52)
-private val BoardShadow = Color(0x33000000)
+/** 层板木纹：上沿受光浅棕 → 板身胡桃棕 → 底边最深 */
+private val BoardWoodBrush = Brush.verticalGradient(
+    0f to Color(0xFF9C7B55),
+    0.45f to Color(0xFF7C5E3E),
+    1f to Color(0xFF573D25),
+)
+/** 层板下方落影：上深下透 */
+private val BoardShadowBrush = Brush.verticalGradient(
+    0f to Color.Black.copy(alpha = 0.32f),
+    1f to Color.Black.copy(alpha = 0f),
+)
 private const val DEFAULT_COLUMNS = 3
 
 /**
@@ -70,7 +80,7 @@ internal fun ShelfGridBookshelf(
                 end = AppDimens.shelfContentHorizontalPadding,
                 bottom = (marginPx + bottomPaddingPx).dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(rows, key = { row -> row.firstOrNull()?.key ?: row.hashCode() }) { row ->
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -90,19 +100,19 @@ internal fun ShelfGridBookshelf(
                             Box(modifier = Modifier.weight(1f))
                         }
                     }
-                    // 木质层板托底 + 下方投影
+                    // 木质层板托底 + 下方落影
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
+                            .height(11.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(BoardColor),
+                            .background(BoardWoodBrush),
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(3.dp)
-                            .background(BoardShadow),
+                            .height(6.dp)
+                            .background(BoardShadowBrush),
                     )
                 }
             }

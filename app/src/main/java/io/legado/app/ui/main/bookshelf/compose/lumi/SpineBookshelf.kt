@@ -46,7 +46,7 @@ private val BoardShadow = Color(0x33000000)
 private val SpineGap = 3.dp
 private val DarkInk = Color(0xFF2B2118)
 private val LightInk = Color(0xFFF8F3EA)
-private const val MIN_TITLE = 7.5f
+private const val MIN_TITLE = 6.5f
 
 /**
  * 书脊木架书架（外观移植自 Lumi_Books）。
@@ -226,13 +226,13 @@ private fun UprightFace(
     val spineW = traits.thickness.dp
     val spineH = rowHeight * traits.heightFraction
     val units = remember(title) { SpineText.verticalUnits(title) }
-    val baseSize = (traits.thickness * 0.44f).coerceIn(9f, 14f)
-    val availPx = with(density) { (spineH - 12.dp).toPx() }
-    fun lineHeightPx(sizeSp: Float) = with(density) { sizeSp.sp.toPx() } * 1.15f
+    val baseSize = (traits.thickness * 0.42f).coerceIn(9.5f, 16f)
+    val availPx = with(density) { (spineH - 8.dp).toPx() }
+    fun lineHeightPx(sizeSp: Float) = with(density) { sizeSp.sp.toPx() } * 1.06f
     var titleSize = baseSize
     var capacity = (availPx / lineHeightPx(baseSize)).toInt().coerceAtLeast(1)
     if (units.size > capacity) {
-        titleSize = (availPx / (units.size * 1.15f)).coerceIn(MIN_TITLE, baseSize)
+        titleSize = (availPx / (units.size * 1.06f)).coerceIn(MIN_TITLE, baseSize)
         capacity = units.size
     }
     val shownUnits = units.take(capacity)
@@ -250,7 +250,7 @@ private fun UprightFace(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(vertical = 6.dp),
+            modifier = Modifier.fillMaxSize().padding(vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -264,7 +264,7 @@ private fun UprightFace(
                         text = ch,
                         color = ink,
                         fontSize = titleSize.sp,
-                        lineHeight = (titleSize * 1.15f).sp,
+                        lineHeight = (titleSize * 1.06f).sp,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         style = TextStyle(shadow = shadow),

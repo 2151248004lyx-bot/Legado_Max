@@ -62,9 +62,9 @@ internal object SpineTraitsProvider {
                 flatWidth = flatWidth,
             )
         } else {
-            // 直立：宽 26–44dp，高 0.70–1.00，少量斜靠
-            val thickness = 26f + random.nextFloat() * 18f
-            val heightFraction = 0.70f + random.nextFloat() * 0.30f
+            // 直立：宽 36–58dp，高 0.85–1.00，少量斜靠；加宽加高以容纳竖排书名
+            val thickness = 36f + random.nextFloat() * 22f
+            val heightFraction = 0.85f + random.nextFloat() * 0.15f
             val lean = if (random.nextFloat() < 0.82f) 0f else (7f + random.nextFloat() * 6f)
             SpineTraits(
                 flat = false,
