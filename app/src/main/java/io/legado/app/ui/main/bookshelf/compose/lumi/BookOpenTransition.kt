@@ -51,12 +51,12 @@ internal fun BookOpenTransition(
     val flipT = seg(p, 0.35f, 0.70f)
     val outT = seg(p, 0.70f, 1f)
 
-    val scale = when {
+    val zoomScale = when {
         p < 0.35f -> lerp(0.78f, 1.02f, zoomT)
         p < 0.70f -> 1.02f
         else -> lerp(1.02f, 1.14f, outT)
     }
-    val rotationY = if (p < 0.70f) {
+    val flipDegrees = if (p < 0.70f) {
         lerp(0f, -160f, flipT)
     } else {
         lerp(-160f, 0f, outT)
@@ -81,9 +81,9 @@ internal fun BookOpenTransition(
                 .aspectRatio(1f / AppDimens.BOOK_COVER_ASPECT)
                 .graphicsLayer {
                     cameraDistance = with(density) { 8.dp.toPx() }
-                    scaleX = scale
-                    scaleY = scale
-                    rotationY = rotationY
+                    scaleX = zoomScale
+                    scaleY = zoomScale
+                    rotationY = flipDegrees
                     alpha = coverAlpha
                 },
             name = bookItem.display.name,
