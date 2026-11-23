@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,12 +32,12 @@ import io.legado.app.ui.widget.components.AppBookCover
 import io.legado.app.ui.widget.components.AppDrawablePainter
 
 /**
- * 点开一本书的翻书过渡：封面先放大居中，再沿左侧书脊中缝把整页封面翻开，
- * 底下渐显内书页，封面翻到背面后淡出，顺势进入阅读页。
+ * 点开一本书的翻书过渡：封面先从书架卡片快速弹出放大到全屏，再沿左侧书脊翻开，
+ * 底下渐显摊开的左右两页内书页，封面翻到背面后淡出，顺势进入阅读页。
  *
  * 性能要点：
  * - 直接复用书架上已加载好的 [coverDrawable]，转场不再二次请求封面；
- * - 内页只保留底色与书脊中缝两层，减少离屏合成负担；
+ * - 内页只保留左右两块底色与书脊，减少离屏合成负担；
  * - 动画值只在图层内读取，Composable 只组合一次。
  * 动画播完一次后由父级清空 [bookItem] 并跳阅读页。
  */
@@ -58,7 +59,7 @@ internal fun BookOpenTransition(
         progress.snapTo(0f)
         progress.animateTo(
             1f,
-            tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            tween(durationMillis = 800, easing = FastOutSlowInEasing),
         )
         onFinished()
     }
@@ -75,7 +76,7 @@ internal fun BookOpenTransition(
                 .background(Color.Black),
         )
 
-        // 内书页：封面翻开后露出，仅底色 + 书脊中缝
+        // 内书页：封面翻开后露出，左右摊开两页 + 中间书脊
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -87,14 +88,16 @@ internal fun BookOpenTransition(
                     scaleY = s
                 },
         ) {
-            Box(Modifier.fillMaxSize().background(Color(0xFFF3ECDC)))
-            Box(
-                Modifier
-                    .align(Alignment.Center)
-                    .width(1.5.dp)
-                    .fillMaxHeight()
-                    .background(Color(0xFFC7BCA1)),
-            )
+            Row(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xE7D3A6)))
+                Box(
+                    Modifier
+                        .width(1.5.dp)
+                        .fillMaxHeight()
+                        .background(Color(0xB9A97F)),
+                )
+                Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xDFC99A)))
+            }
         }
 
         // 封面：沿左中缝翻开，优先复用已加载的 Drawable
@@ -104,7 +107,8 @@ internal fun BookOpenTransition(
                 .aspectRatio(1f / AppDimens.BOOK_COVER_ASPECT)
                 .graphicsLayer {
                     val p = progress.value
-                    cameraDistance = with(density) { 18.dp.toPx() }
+                    val cam = with(density) { 12.dp.toPx() }
+                    cameraDistance = cam
                     transformOrigin = TransformOrigin(0f, 0.5f)
                     val z = zoomScale(p)
                     scaleX = z
@@ -147,15 +151,16 @@ private fun ease(t: Float): Float = t * t * (3f - 2f * t)
 
 private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
-private fun zoomScale(p: Float): Float = lerp(0.9f, 1.0f, ease(ramp(p, 0f, 0.3f)))
+/** 弹出放大：起步段短促，0.55 → 1.0 铺满 */
+private fun zoomScale(p: Float): Float = lerp(0.55f, 1.0f, ease(ramp(p, 0f, 0.3f)))
 
 /** 沿左中缝向右翻开至背面 */
-private fun flipDegrees(p: Float): Float = -160f * ease(ramp(p, 0.28f, 0.82f))
+private fun flipDegrees(p: Float): Float = -150f * ease(ramp(p, 0.25f, 0.78f))
 
-private fun coverAlpha(p: Float): Float = 1f - ramp(p, 0.82f, 1f)
+private fun coverAlpha(p: Float): Float = 1f - ramp(p, 0.8f, 1f)
 
-private fun pageAlpha(p: Float): Float = ease(ramp(p, 0.35f, 0.8f))
+private fun pageAlpha(p: Float): Float = ease(ramp(p, 0.4f, 0.85f))
 
-private fun pageScale(p: Float): Float = lerp(0.96f, 1f, ramp(p, 0.35f, 0.8f))
+private fun pageScale(p: Float): Float = lerp(0.96f, 1f, ramp(p, 0.4f, 0.85f))
 
-private fun maskAlpha(p: Float): Float = lerp(0.2f, 0.85f, ramp(p, 0f, 1f))
+private fun maskAlpha(p: Float): Float = lerp(0.15f, 0.7f, ramp(p, 0.15f, 1f))
