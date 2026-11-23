@@ -59,7 +59,7 @@ internal fun BookOpenTransition(
         progress.snapTo(0f)
         progress.animateTo(
             1f,
-            tween(durationMillis = 800, easing = FastOutSlowInEasing),
+            tween(durationMillis = 1000, easing = FastOutSlowInEasing),
         )
         onFinished()
     }
@@ -151,16 +151,16 @@ private fun ease(t: Float): Float = t * t * (3f - 2f * t)
 
 private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
-/** 弹出放大：起步段短促，0.55 → 1.0 铺满 */
-private fun zoomScale(p: Float): Float = lerp(0.55f, 1.0f, ease(ramp(p, 0f, 0.3f)))
+/** 放大弹出：先于翻页完成，0.55 → 1.0 铺满 */
+private fun zoomScale(p: Float): Float = lerp(0.55f, 1.0f, ease(ramp(p, 0f, 0.35f)))
 
-/** 沿左中缝向右翻开至背面 */
-private fun flipDegrees(p: Float): Float = -150f * ease(ramp(p, 0.25f, 0.78f))
+/** 沿左中缝轻掀：只翻小角度，慢起慢收，不整页甩到背面 */
+private fun flipDegrees(p: Float): Float = -70f * ease(ramp(p, 0.32f, 0.82f))
 
-private fun coverAlpha(p: Float): Float = 1f - ramp(p, 0.8f, 1f)
+private fun coverAlpha(p: Float): Float = 1f - ramp(p, 0.82f, 1f)
 
-private fun pageAlpha(p: Float): Float = ease(ramp(p, 0.4f, 0.85f))
+private fun pageAlpha(p: Float): Float = ease(ramp(p, 0.5f, 0.9f))
 
-private fun pageScale(p: Float): Float = lerp(0.96f, 1f, ramp(p, 0.4f, 0.85f))
+private fun pageScale(p: Float): Float = lerp(0.97f, 1f, ramp(p, 0.5f, 0.9f))
 
-private fun maskAlpha(p: Float): Float = lerp(0.15f, 0.7f, ramp(p, 0.15f, 1f))
+private fun maskAlpha(p: Float): Float = lerp(0.15f, 0.65f, ramp(p, 0.2f, 1f))
